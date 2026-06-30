@@ -1,7 +1,6 @@
 """Public package interface for gundam-interface."""
 
 from ._version import __version__
-from .config import GundamRuntime
 from .interface import GundamInterface, PostfitThrowSamples
 from .loader import GundamLoader
 from .logging import (
@@ -19,6 +18,7 @@ from .parameters import (
     parameterThrowValues,
     physicalToNormalized,
 )
+from .runtime import GundamRuntime
 
 __all__ = [
     "__version__",

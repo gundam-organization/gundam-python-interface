@@ -9,7 +9,6 @@ from typing import Any, Iterator
 
 import numpy as np
 
-from .config import GundamRuntime
 from .logging import maybeRedirectNativeOutput, temporaryRedirectNativeOutput
 from .parameters import (
     GundamParameter,
@@ -20,6 +19,7 @@ from .parameters import (
     parameterThrowValues,
     physicalToNormalized,
 )
+from .runtime import GundamRuntime
 
 
 @dataclass(frozen=True, slots=True)
