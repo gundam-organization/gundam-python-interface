@@ -6,8 +6,7 @@ import sys
 import tempfile
 import threading
 import time
-import uuid
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
@@ -87,29 +86,31 @@ def redirectNativeOutput(
 def maybeRedirectNativeOutput(
     logPath: str | os.PathLike[str] | None,
     *,
-    stream: bool = True,
+    stream: bool = False,
+    prefix: str = "gundam",
 ):
+    """Redirect native output to a user path or to an auto-deleted temporary file."""
     if logPath is None:
-        return nullcontext()
+        return temporaryRedirectNativeOutput(prefix=prefix, stream=stream)
     return redirectNativeOutput(logPath, stream=stream)
 
 
 @contextmanager
-def temporaryRedirectNativeOutput(prefix: str):
-    if not isNotebookRuntime():
-        yield
-        return
+def temporaryRedirectNativeOutput(
+    prefix: str = "gundam",
+    *,
+    stream: bool = False,
+) -> Iterator[None]:
+    """Redirect native output to a temporary log file and delete it afterwards."""
+    with tempfile.NamedTemporaryFile(prefix=f"{prefix}_", suffix=".log", delete=False) as logFile:
+        logPath = Path(logFile.name)
 
-    logPath = (
-        Path(tempfile.gettempdir())
-        / f"{prefix}_{os.getpid()}_{uuid.uuid4().hex[:8]}.log"
-    )
     try:
-        with redirectNativeOutput(logPath):
+        with redirectNativeOutput(logPath, stream=stream):
             yield
     finally:
         try:
-            if logPath.exists():
+            if isNotebookRuntime() and logPath.exists():
                 logContent = logPath.read_text(encoding="utf-8", errors="replace")
                 if logContent:
                     print(logContent, end="" if logContent.endswith("\n") else "\n")

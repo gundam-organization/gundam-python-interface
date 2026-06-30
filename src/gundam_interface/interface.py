@@ -9,7 +9,7 @@ from typing import Any, Iterator
 
 import numpy as np
 
-from .logging import maybeRedirectNativeOutput, temporaryRedirectNativeOutput
+from .logging import maybeRedirectNativeOutput
 from .parameters import (
     GundamParameter,
     collectActiveParameters,
@@ -159,11 +159,9 @@ class GundamInterface:
             self._requireConfigured()
             workingDirectory = Path(self.runtime.workDir).expanduser().resolve()
 
-            if logPath is None:
-                redirectContext = temporaryRedirectNativeOutput("gundam_initialize")
-            else:
+            if logPath is not None:
                 logPath = Path(logPath).expanduser().resolve()
-                redirectContext = maybeRedirectNativeOutput(logPath)
+            redirectContext = maybeRedirectNativeOutput(logPath, prefix="gundam_initialize")
 
             with temporaryWorkingDirectory(workingDirectory):
                 with redirectContext:
@@ -230,7 +228,7 @@ class GundamInterface:
             workingDirectory = Path(self.runtime.workDir).expanduser().resolve()
 
             with temporaryWorkingDirectory(workingDirectory):
-                with maybeRedirectNativeOutput(logPath):
+                with maybeRedirectNativeOutput(logPath, prefix="gundam_evaluate"):
                     self.engine.getLikelihoodInterface().propagateAndEvalLikelihood()
                 return float(self.engine.getLikelihoodInterface().getLastLikelihood())
 
@@ -245,7 +243,7 @@ class GundamInterface:
             workingDirectory = Path(self.runtime.workDir).expanduser().resolve()
 
             with temporaryWorkingDirectory(workingDirectory):
-                with maybeRedirectNativeOutput(logPath):
+                with maybeRedirectNativeOutput(logPath, prefix="gundam_minimize"):
                     self.engine.getMinimizer().minimize()
 
             self.refreshParameters()
