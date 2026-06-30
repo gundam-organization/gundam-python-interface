@@ -35,6 +35,7 @@ def redirectNativeOutput(
     logPath: str | os.PathLike[str],
     *,
     stream: bool = False,
+    debug: bool = False,
 ) -> Iterator[None]:
     """Redirect C/C++ stdout and stderr to a file.
 
@@ -44,6 +45,11 @@ def redirectNativeOutput(
     """
     path = Path(logPath).expanduser()
     path.parent.mkdir(parents=True, exist_ok=True)
+    if debug:
+        print(
+            f"GUNDAM native output is redirected to log file: {path}",
+            flush=True,
+        )
 
     libc = ctypes.CDLL(None)
     sys.stdout.flush()
@@ -86,31 +92,39 @@ def redirectNativeOutput(
 def maybeRedirectNativeOutput(
     logPath: str | os.PathLike[str] | None,
     *,
-    stream: bool = False,
+    stream: bool = True,
     prefix: str = "gundam",
+    debug: bool = False,
 ):
     """Redirect native output to a user path or to an auto-deleted temporary file."""
     if logPath is None:
-        return temporaryRedirectNativeOutput(prefix=prefix, stream=stream)
-    return redirectNativeOutput(logPath, stream=stream)
+        return temporaryRedirectNativeOutput(prefix=prefix, stream=stream, debug=debug)
+    return redirectNativeOutput(logPath, stream=stream, debug=debug)
 
 
 @contextmanager
 def temporaryRedirectNativeOutput(
     prefix: str = "gundam",
     *,
-    stream: bool = False,
+    stream: bool = True,
+    debug: bool = False,
 ) -> Iterator[None]:
     """Redirect native output to a temporary log file and delete it afterwards."""
     with tempfile.NamedTemporaryFile(prefix=f"{prefix}_", suffix=".log", delete=False) as logFile:
         logPath = Path(logFile.name)
+    if debug:
+        print(
+            "GUNDAM native output is redirected to temporary log file "
+            f"(auto-deleted after execution): {logPath}",
+            flush=True,
+        )
 
     try:
         with redirectNativeOutput(logPath, stream=stream):
             yield
     finally:
         try:
-            if isNotebookRuntime() and logPath.exists():
+            if not stream and isNotebookRuntime() and logPath.exists():
                 logContent = logPath.read_text(encoding="utf-8", errors="replace")
                 if logContent:
                     print(logContent, end="" if logContent.endswith("\n") else "\n")

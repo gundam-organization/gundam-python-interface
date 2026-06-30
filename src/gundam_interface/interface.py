@@ -151,6 +151,7 @@ class GundamInterface:
     def initialize(
         self,
         logPath: str | os.PathLike[str] | None = None,
+        debugLogRedirection: bool = False,
     ) -> None:
         with preservedWorkingDirectory():
             self._requireConfigured()
@@ -158,7 +159,11 @@ class GundamInterface:
 
             if logPath is not None:
                 logPath = Path(logPath).expanduser().resolve()
-            redirectContext = maybeRedirectNativeOutput(logPath, prefix="gundam_initialize")
+            redirectContext = maybeRedirectNativeOutput(
+                logPath,
+                prefix="gundam_initialize",
+                debug=debugLogRedirection,
+            )
 
             with temporaryWorkingDirectory(workingDirectory):
                 with redirectContext:
@@ -201,6 +206,7 @@ class GundamInterface:
         self,
         physicalValues: np.ndarray | None = None,
         logPath: str | os.PathLike[str] | None = None,
+        debugLogRedirection: bool = False,
     ) -> float:
         with preservedWorkingDirectory():
             self._requireParameters()
@@ -212,13 +218,18 @@ class GundamInterface:
             workingDirectory = Path(self.runtime.workDir).expanduser().resolve()
 
             with temporaryWorkingDirectory(workingDirectory):
-                with maybeRedirectNativeOutput(logPath, prefix="gundam_evaluate"):
+                with maybeRedirectNativeOutput(
+                    logPath,
+                    prefix="gundam_evaluate",
+                    debug=debugLogRedirection,
+                ):
                     self.engine.getLikelihoodInterface().propagateAndEvalLikelihood()
                 return float(self.engine.getLikelihoodInterface().getLastLikelihood())
 
     def minimize(
         self,
         logPath: str | os.PathLike[str] | None = None,
+        debugLogRedirection: bool = False,
     ) -> float:
         with preservedWorkingDirectory():
             self._requireParameters()
@@ -227,7 +238,11 @@ class GundamInterface:
             workingDirectory = Path(self.runtime.workDir).expanduser().resolve()
 
             with temporaryWorkingDirectory(workingDirectory):
-                with maybeRedirectNativeOutput(logPath, prefix="gundam_minimize"):
+                with maybeRedirectNativeOutput(
+                    logPath,
+                    prefix="gundam_minimize",
+                    debug=debugLogRedirection,
+                ):
                     self.engine.getMinimizer().minimize()
 
             self.refreshParameters()
