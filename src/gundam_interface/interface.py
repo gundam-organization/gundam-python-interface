@@ -95,6 +95,11 @@ class GundamInterface:
         propagator = self.engine.getLikelihoodInterface().getDataPropagator()
         return GundamSamples(propagator=propagator)
 
+    @property
+    def minimizerFitParameters(self):
+        self._requireConfigured()
+        return self.engine.getMinimizer().getMinimizerFitParameterPtr()
+
     def importGundam(self):
         if self.gundam is None:
             self.gundam = self.runtime.loader.importGundam()

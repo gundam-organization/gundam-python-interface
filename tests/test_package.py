@@ -110,6 +110,21 @@ def test_gundam_interface_exposes_model_and_data_samples(tmp_path) -> None:
     assert interface.dataSamples.sumWeights(0).tolist() == [2.0]
 
 
+def test_gundam_interface_exposes_minimizer_fit_parameters(tmp_path) -> None:
+    fitParameters = [object(), object()]
+    interface = gundam_interface.GundamInterface(
+        runtime=gundam_interface.GundamRuntime(
+            workDir=tmp_path,
+            loader=gundam_interface.GundamLoader(),
+            configPath="config.yaml",
+        ),
+        gundam=None,
+    )
+    interface.engine = FakeEngineWithMinimizer(FakeMinimizer(fitParameters))
+
+    assert interface.minimizerFitParameters is fitParameters
+
+
 def test_gundam_runtime_loads_legacy_python_path_into_loader(tmp_path) -> None:
     runtime = gundam_interface.GundamRuntime.fromDict(
         {
@@ -179,6 +194,22 @@ class FakeEngine:
 
     def getLikelihoodInterface(self):
         return self._likelihoodInterface
+
+
+class FakeMinimizer:
+    def __init__(self, fitParameters) -> None:
+        self._fitParameters = fitParameters
+
+    def getMinimizerFitParameterPtr(self):
+        return self._fitParameters
+
+
+class FakeEngineWithMinimizer:
+    def __init__(self, minimizer) -> None:
+        self._minimizer = minimizer
+
+    def getMinimizer(self):
+        return self._minimizer
 
 
 def test_gundam_runtime_loads_gundam_lib_path_into_loader(tmp_path) -> None:
