@@ -12,7 +12,7 @@ pip install gundam-interface
 
 For upgrading:
 ```bash
-python -m pip install --upgrade gundam-interface
+pip install --upgrade gundam-interface
 ```
 
 For local development:
