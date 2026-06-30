@@ -17,6 +17,7 @@ from .parameters import (
     parameterThrowValues,
 )
 from .runtime import GundamRuntime
+from .samples import GundamSamples
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,6 +82,18 @@ class GundamInterface:
     @property
     def parameterNames(self) -> list[str]:
         return [parameter.name for parameter in self.parameters]
+
+    @property
+    def modelSamples(self) -> GundamSamples:
+        self._requireConfigured()
+        propagator = self.engine.getLikelihoodInterface().getModelPropagator()
+        return GundamSamples(propagator=propagator)
+
+    @property
+    def dataSamples(self) -> GundamSamples:
+        self._requireConfigured()
+        propagator = self.engine.getLikelihoodInterface().getDataPropagator()
+        return GundamSamples(propagator=propagator)
 
     def importGundam(self):
         if self.gundam is None:
