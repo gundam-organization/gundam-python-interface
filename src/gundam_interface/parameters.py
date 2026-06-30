@@ -81,19 +81,3 @@ def parameterThrowValues(parameters: list[GundamParameter]) -> np.ndarray | None
     if any(value is None for value in values):
         return None
     return np.array(values, dtype=np.float64)
-
-
-def normalizedToPhysical(
-    normalizedValues: np.ndarray,
-    priors: np.ndarray,
-    stepSizes: np.ndarray,
-) -> np.ndarray:
-    return priors + stepSizes * np.asarray(normalizedValues, dtype=np.float64)
-
-
-def physicalToNormalized(
-    physicalValues: np.ndarray,
-    priors: np.ndarray,
-    stepSizes: np.ndarray,
-) -> np.ndarray:
-    return (np.asarray(physicalValues, dtype=np.float64) - priors) / stepSizes

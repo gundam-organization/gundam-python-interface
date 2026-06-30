@@ -13,11 +13,9 @@ from .logging import maybeRedirectNativeOutput
 from .parameters import (
     GundamParameter,
     collectActiveParameters,
-    normalizedToPhysical,
     parameterPriors,
     parameterSteps,
     parameterThrowValues,
-    physicalToNormalized,
 )
 from .runtime import GundamRuntime
 
@@ -27,7 +25,6 @@ class PostfitThrowSamples:
     """GUNDAM post-fit throws with propagated likelihood evaluations."""
 
     physicalValues: np.ndarray
-    normalizedValues: np.ndarray
     llh: np.ndarray
 
 
@@ -200,26 +197,13 @@ class GundamInterface:
         for parameter in self.parameters:
             parameter.resetToPrior()
 
-    def normalizedToPhysical(self, normalizedValues: np.ndarray) -> np.ndarray:
-        self._requireParameters()
-        return normalizedToPhysical(normalizedValues, self.priors, self.stepSizes)
-
-    def physicalToNormalized(self, physicalValues: np.ndarray) -> np.ndarray:
-        self._requireParameters()
-        return physicalToNormalized(physicalValues, self.priors, self.stepSizes)
-
     def evaluateLlh(
         self,
         physicalValues: np.ndarray | None = None,
-        normalizedValues: np.ndarray | None = None,
         logPath: str | os.PathLike[str] | None = None,
     ) -> float:
         with preservedWorkingDirectory():
             self._requireParameters()
-            if physicalValues is not None and normalizedValues is not None:
-                raise ValueError("Provide either physicalValues or normalizedValues, not both")
-            if normalizedValues is not None:
-                physicalValues = self.normalizedToPhysical(normalizedValues)
             if physicalValues is not None:
                 self.setParameterValues(physicalValues)
 
@@ -271,7 +255,6 @@ class GundamInterface:
             workingDirectory = Path(self.runtime.workDir).expanduser().resolve()
 
             physicalValues = np.empty((nThrows, self.priors.shape[0]), dtype=np.float64)
-            normalizedValues = np.empty_like(physicalValues)
             llh = np.empty(nThrows, dtype=np.float64)
 
             with temporaryWorkingDirectory(workingDirectory):
@@ -287,16 +270,12 @@ class GundamInterface:
                 for throwIndex in throwIterator:
                     minimizer.throwPostfitParameters()
                     physicalValues[throwIndex] = self.getParameterValues()
-                    normalizedValues[throwIndex] = self.physicalToNormalized(
-                        physicalValues[throwIndex]
-                    )
                     likelihoodInterface.propagateAndEvalLikelihood()
                     llh[throwIndex] = float(likelihoodInterface.getLastLikelihood())
 
             self.refreshParameters()
             return PostfitThrowSamples(
                 physicalValues=physicalValues,
-                normalizedValues=normalizedValues,
                 llh=llh,
             )
 

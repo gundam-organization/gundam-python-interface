@@ -12,11 +12,9 @@ from .logging import (
 from .parameters import (
     GundamParameter,
     collectActiveParameters,
-    normalizedToPhysical,
     parameterPriors,
     parameterSteps,
     parameterThrowValues,
-    physicalToNormalized,
 )
 from .runtime import GundamRuntime
 
@@ -30,11 +28,9 @@ __all__ = [
     "collectActiveParameters",
     "isNotebookRuntime",
     "maybeRedirectNativeOutput",
-    "normalizedToPhysical",
     "parameterPriors",
     "parameterSteps",
     "parameterThrowValues",
-    "physicalToNormalized",
     "redirectNativeOutput",
     "temporaryRedirectNativeOutput",
 ]
