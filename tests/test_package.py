@@ -1,8 +1,10 @@
+from importlib.metadata import version
+
 import gundam_interface
 
 
 def test_package_exposes_version() -> None:
-    assert gundam_interface.__version__ == "0.1.0"
+    assert gundam_interface.__version__ == version("gundam-interface")
 
 
 def test_package_exposes_public_api() -> None:
