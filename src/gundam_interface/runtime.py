@@ -1,3 +1,5 @@
+"""Runtime configuration for a GUNDAM engine instance."""
+
 from __future__ import annotations
 
 import json
@@ -10,7 +12,43 @@ from .loader import GundamLoader
 
 @dataclass(slots=True)
 class GundamRuntime:
-    """Runtime context needed to construct the GUNDAM Python interface."""
+    """Configuration needed to load and configure a GUNDAM engine.
+
+    ``GundamRuntime`` describes how a ``GundamInterface`` should construct a
+    concrete GUNDAM engine instance. It keeps together the loader used to import
+    the GUNDAM Python bindings, the runtime working directory, the GUNDAM
+    configuration source, override files, data mode, thread count, and optional
+    random seed.
+
+    The runtime accepts either a configuration file path relative to ``workDir``
+    or an already-built JSON configuration string. Override paths are resolved
+    relative to ``workDir`` unless they are absolute.
+
+    Parameters
+    ----------
+    loader:
+        Loader used to import the GUNDAM Python bindings.
+    workDir:
+        GUNDAM runtime working directory. Relative config and override paths are
+        resolved from this directory.
+    nCpuThreads:
+        Number of CPU threads to request from GUNDAM. Defaults to 1.
+    configPath:
+        Path to the base GUNDAM config file, relative to ``workDir`` or
+        absolute. Mutually exclusive with ``configJsonString``.
+    overrideList:
+        Sequence of override config files applied after ``configPath``.
+    configJsonString:
+        Serialized GUNDAM JSON config. Mutually exclusive with ``configPath``.
+    forceAsimov:
+        Backward-compatible way to choose Asimov or real data when ``dataType``
+        is omitted.
+    dataType:
+        GUNDAM likelihood data type: ``"Asimov"``, ``"Toy"``, or
+        ``"RealData"``. Defaults to ``"Asimov"``.
+    randomSeed:
+        Optional non-negative seed applied to the GUNDAM engine.
+    """
 
     loader: GundamLoader
     workDir: str | Path
@@ -44,6 +82,12 @@ class GundamRuntime:
 
     @classmethod
     def fromDict(cls, data: dict[str, Any]) -> "GundamRuntime":
+        """Create a runtime from a JSON-compatible dictionary.
+
+        The preferred loader schema is ``{"loader": {"gundamLibPath": ...}}``.
+        Top-level ``gundamLibPath`` and legacy top-level ``pythonPath`` are also
+        accepted for compatibility with older metadata.
+        """
         return cls(
             workDir=data["workDir"],
             nCpuThreads=int(data.get("nCpuThreads", 1)),
@@ -67,10 +111,20 @@ class GundamRuntime:
 
     @classmethod
     def fromJsonFile(cls, path: str | Path) -> "GundamRuntime":
+        """Load a runtime definition from a JSON file."""
         with Path(path).open("r", encoding="utf-8") as file:
             return cls.fromDict(json.load(file))
 
     def toDict(self, includeConfigJsonString: bool = True) -> dict[str, Any]:
+        """Return a JSON-compatible runtime description.
+
+        Parameters
+        ----------
+        includeConfigJsonString:
+            Include the full serialized config when this runtime was built from
+            ``configJsonString``. Set this to ``False`` when writing lightweight
+            metadata that should avoid embedding the full config payload.
+        """
         data = {
             "nCpuThreads": self.nCpuThreads,
             "workDir": str(self.workDir),
@@ -88,6 +142,7 @@ class GundamRuntime:
         return data
 
     def toJsonFile(self, path: str | Path) -> None:
+        """Write this runtime description as formatted JSON."""
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("w", encoding="utf-8") as file:
@@ -118,6 +173,7 @@ class GundamRuntime:
 
     @property
     def absoluteConfigPath(self) -> Path:
+        """Resolved base config path."""
         if self.configPath is None:
             raise ValueError("No configPath is defined for this GundamRuntime")
         if self.configPath.is_absolute():
@@ -126,6 +182,7 @@ class GundamRuntime:
 
     @property
     def absoluteOverridePaths(self) -> list[Path]:
+        """Resolved override config paths."""
         overridePaths = []
         for overridePath in self.overrideList:
             if overridePath.is_absolute():
@@ -136,14 +193,16 @@ class GundamRuntime:
 
     @property
     def defaultInitializeLogPath(self) -> Path:
+        """Default log path for GUNDAM initialization output."""
         return self.workDir / "gundam_initialize.log"
 
     @property
     def defaultEvaluateLogPath(self) -> Path:
+        """Default log path for GUNDAM likelihood evaluation output."""
         return self.workDir / "gundam_evaluate.log"
 
     def validatePaths(self) -> None:
-        """Fail early on missing user-provided paths."""
+        """Fail early when user-provided filesystem paths do not exist."""
         if not self.workDir.exists():
             raise FileNotFoundError(f"GUNDAM workDir does not exist: {self.workDir}")
         if self.configJsonString is not None:
