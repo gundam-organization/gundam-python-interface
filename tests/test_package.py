@@ -17,6 +17,7 @@ def test_package_exposes_public_api() -> None:
 def test_gundam_runtime_defaults_to_one_cpu_thread(tmp_path) -> None:
     runtime = gundam_interface.GundamRuntime(
         workDir=tmp_path,
+        loader=gundam_interface.GundamLoader(),
         configPath="config.yaml",
     )
 

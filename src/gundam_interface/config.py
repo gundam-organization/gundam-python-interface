@@ -12,6 +12,7 @@ from .loader import GundamLoader
 class GundamRuntime:
     """Runtime context needed to construct the GUNDAM Python interface."""
 
+    loader: GundamLoader
     workDir: str | Path
     nCpuThreads: int = 1
     configPath: str | Path | None = None
@@ -20,7 +21,6 @@ class GundamRuntime:
     forceAsimov: bool | None = None
     dataType: str | None = None
     randomSeed: int | None = None
-    loader: GundamLoader = field(default_factory=GundamLoader)
 
     def __post_init__(self) -> None:
         self.workDir = Path(self.workDir).expanduser()
