@@ -1,4 +1,5 @@
 from importlib.metadata import version
+from inspect import signature
 
 import gundam_interface
 from gundam_interface.logging import GundamLogRedirector
@@ -57,6 +58,14 @@ def test_gundam_runtime_owns_log_redirector(tmp_path) -> None:
     )
 
     assert isinstance(runtime.logRedirector, GundamLogRedirector)
+    runtime.logRedirector.debug = True
+    assert runtime.logRedirector.debug is True
+
+
+def test_gundam_interface_methods_do_not_expose_log_debug_option() -> None:
+    assert "debugLogRedirection" not in signature(gundam_interface.GundamInterface.initialize).parameters
+    assert "debugLogRedirection" not in signature(gundam_interface.GundamInterface.evaluateLlh).parameters
+    assert "debugLogRedirection" not in signature(gundam_interface.GundamInterface.minimize).parameters
 
 
 def test_gundam_runtime_loads_legacy_python_path_into_loader(tmp_path) -> None:

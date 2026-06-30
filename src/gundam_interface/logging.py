@@ -62,11 +62,9 @@ class GundamLogRedirector:
         *,
         prefix: str = "gundam",
         stream: bool | None = None,
-        debug: bool | None = None,
     ):
         """Return a context manager for the configured redirection policy."""
         stream = self.stream if stream is None else stream
-        debug = self.debug if debug is None else debug
 
         if logPath is None:
             if not (self.redirectNotebookOutput and isNotebookRuntime()):
@@ -74,10 +72,9 @@ class GundamLogRedirector:
             return self.redirectTemporaryNativeOutput(
                 prefix=prefix,
                 stream=stream,
-                debug=debug,
             )
 
-        return self.redirectNativeOutput(logPath, stream=stream, debug=debug)
+        return self.redirectNativeOutput(logPath, stream=stream)
 
     @contextmanager
     def redirectNativeOutput(
@@ -85,7 +82,6 @@ class GundamLogRedirector:
         logPath: str | os.PathLike[str],
         *,
         stream: bool | None = None,
-        debug: bool | None = None,
     ) -> Iterator[None]:
         """Redirect C/C++ stdout and stderr to a file.
 
@@ -94,10 +90,9 @@ class GundamLogRedirector:
         When ``stream`` is true, new log content is also printed as it is written.
         """
         stream = self.stream if stream is None else stream
-        debug = self.debug if debug is None else debug
         path = Path(logPath).expanduser()
         path.parent.mkdir(parents=True, exist_ok=True)
-        if debug and isNotebookRuntime():
+        if self.debug and isNotebookRuntime():
             print(
                 f"GUNDAM native output is redirected to log file: {path}",
                 flush=True,
@@ -146,14 +141,12 @@ class GundamLogRedirector:
         prefix: str = "gundam",
         *,
         stream: bool | None = None,
-        debug: bool | None = None,
     ) -> Iterator[None]:
         """Redirect native output to a temporary log file and delete it afterwards."""
         stream = self.stream if stream is None else stream
-        debug = self.debug if debug is None else debug
         with tempfile.NamedTemporaryFile(prefix=f"{prefix}_", suffix=".log", delete=False) as logFile:
             logPath = Path(logFile.name)
-        if debug and isNotebookRuntime():
+        if self.debug and isNotebookRuntime():
             print(
                 "GUNDAM native output is redirected to temporary log file "
                 f"(auto-deleted after execution): {logPath}",
@@ -180,7 +173,10 @@ def redirectNativeOutput(
     debug: bool = False,
 ) -> Iterator[None]:
     """Compatibility wrapper around :class:`GundamLogRedirector`."""
-    return GundamLogRedirector(stream=stream, debug=debug).redirectNativeOutput(logPath)
+    return GundamLogRedirector(stream=stream, debug=debug).redirectNativeOutput(
+        logPath,
+        stream=stream,
+    )
 
 
 def maybeRedirectNativeOutput(
@@ -211,6 +207,7 @@ def temporaryRedirectNativeOutput(
     """Compatibility wrapper around :class:`GundamLogRedirector`."""
     return GundamLogRedirector(stream=stream, debug=debug).redirectTemporaryNativeOutput(
         prefix=prefix,
+        stream=stream,
     )
 
 

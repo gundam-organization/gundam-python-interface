@@ -150,7 +150,6 @@ class GundamInterface:
     def initialize(
         self,
         logPath: str | os.PathLike[str] | None = None,
-        debugLogRedirection: bool = False,
     ) -> None:
         with preservedWorkingDirectory():
             self._requireConfigured()
@@ -161,7 +160,6 @@ class GundamInterface:
             redirectContext = self.runtime.logRedirector.redirect(
                 logPath,
                 prefix="gundam_initialize",
-                debug=debugLogRedirection,
             )
 
             with temporaryWorkingDirectory(workingDirectory):
@@ -205,7 +203,6 @@ class GundamInterface:
         self,
         physicalValues: np.ndarray | None = None,
         logPath: str | os.PathLike[str] | None = None,
-        debugLogRedirection: bool = False,
     ) -> float:
         with preservedWorkingDirectory():
             self._requireParameters()
@@ -220,7 +217,6 @@ class GundamInterface:
                 with self.runtime.logRedirector.redirect(
                     logPath,
                     prefix="gundam_evaluate",
-                    debug=debugLogRedirection,
                 ):
                     self.engine.getLikelihoodInterface().propagateAndEvalLikelihood()
                 return float(self.engine.getLikelihoodInterface().getLastLikelihood())
@@ -228,7 +224,6 @@ class GundamInterface:
     def minimize(
         self,
         logPath: str | os.PathLike[str] | None = None,
-        debugLogRedirection: bool = False,
     ) -> float:
         with preservedWorkingDirectory():
             self._requireParameters()
@@ -240,7 +235,6 @@ class GundamInterface:
                 with self.runtime.logRedirector.redirect(
                     logPath,
                     prefix="gundam_minimize",
-                    debug=debugLogRedirection,
                 ):
                     self.engine.getMinimizer().minimize()
 
