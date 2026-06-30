@@ -6,7 +6,7 @@ import sys
 import tempfile
 import threading
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from typing import Iterator
 
@@ -45,7 +45,7 @@ def redirectNativeOutput(
     """
     path = Path(logPath).expanduser()
     path.parent.mkdir(parents=True, exist_ok=True)
-    if debug:
+    if debug and isNotebookRuntime():
         print(
             f"GUNDAM native output is redirected to log file: {path}",
             flush=True,
@@ -92,12 +92,19 @@ def redirectNativeOutput(
 def maybeRedirectNativeOutput(
     logPath: str | os.PathLike[str] | None,
     *,
-    stream: bool = True,
+    stream: bool = False,
     prefix: str = "gundam",
     debug: bool = False,
 ):
-    """Redirect native output to a user path or to an auto-deleted temporary file."""
+    """Redirect native output only when needed.
+
+    With ``logPath=None``, regular Python scripts keep native stdout/stderr
+    untouched. Notebook runtimes redirect through a temporary file so native
+    output is captured reliably by the frontend.
+    """
     if logPath is None:
+        if not isNotebookRuntime():
+            return nullcontext()
         return temporaryRedirectNativeOutput(prefix=prefix, stream=stream, debug=debug)
     return redirectNativeOutput(logPath, stream=stream, debug=debug)
 
@@ -106,13 +113,13 @@ def maybeRedirectNativeOutput(
 def temporaryRedirectNativeOutput(
     prefix: str = "gundam",
     *,
-    stream: bool = True,
+    stream: bool = False,
     debug: bool = False,
 ) -> Iterator[None]:
     """Redirect native output to a temporary log file and delete it afterwards."""
     with tempfile.NamedTemporaryFile(prefix=f"{prefix}_", suffix=".log", delete=False) as logFile:
         logPath = Path(logFile.name)
-    if debug:
+    if debug and isNotebookRuntime():
         print(
             "GUNDAM native output is redirected to temporary log file "
             f"(auto-deleted after execution): {logPath}",
@@ -124,7 +131,7 @@ def temporaryRedirectNativeOutput(
             yield
     finally:
         try:
-            if not stream and isNotebookRuntime() and logPath.exists():
+            if not stream and logPath.exists():
                 logContent = logPath.read_text(encoding="utf-8", errors="replace")
                 if logContent:
                     print(logContent, end="" if logContent.endswith("\n") else "\n")

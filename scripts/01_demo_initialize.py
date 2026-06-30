@@ -41,5 +41,8 @@ runtime = GundamRuntime(
 runtime.toDict(includeConfigJsonString=False)
 
 gundam = GundamInterface(runtime)
+print("CONFIGURE")
 gundam.configure()
+
+print("INIT")
 gundam.initialize(debugLogRedirection=True)
