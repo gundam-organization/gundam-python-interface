@@ -71,67 +71,116 @@ class GundamLogRedirector:
         if logPath is None:
             if not (self.redirectNotebookOutput and isNotebookRuntime()):
                 return nullcontext()
-            return temporaryRedirectNativeOutput(prefix=prefix, stream=stream, debug=debug)
+            return self.redirectTemporaryNativeOutput(
+                prefix=prefix,
+                stream=stream,
+                debug=debug,
+            )
 
-        return redirectNativeOutput(logPath, stream=stream, debug=debug)
+        return self.redirectNativeOutput(logPath, stream=stream, debug=debug)
 
-@contextmanager
+    @contextmanager
+    def redirectNativeOutput(
+        self,
+        logPath: str | os.PathLike[str],
+        *,
+        stream: bool | None = None,
+        debug: bool | None = None,
+    ) -> Iterator[None]:
+        """Redirect C/C++ stdout and stderr to a file.
+
+        This is useful in Jupyter where native C++ loggers can interact poorly with
+        ipykernel stdout capture. Python stdout/stderr are restored after the block.
+        When ``stream`` is true, new log content is also printed as it is written.
+        """
+        stream = self.stream if stream is None else stream
+        debug = self.debug if debug is None else debug
+        path = Path(logPath).expanduser()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if debug and isNotebookRuntime():
+            print(
+                f"GUNDAM native output is redirected to log file: {path}",
+                flush=True,
+            )
+
+        libc = ctypes.CDLL(None)
+        sys.stdout.flush()
+        sys.stderr.flush()
+        libc.fflush(None)
+
+        stdoutFd = os.dup(1)
+        stderrFd = os.dup(2)
+        streamStopEvent: threading.Event | None = None
+        streamThread: threading.Thread | None = None
+
+        try:
+            with path.open("ab", buffering=0) as nativeLog:
+                streamOffset = nativeLog.tell()
+                if stream:
+                    streamStopEvent = threading.Event()
+                    streamThread = threading.Thread(
+                        target=_streamLogFile,
+                        args=(path, streamStopEvent, streamOffset, stdoutFd),
+                        daemon=True,
+                    )
+                    streamThread.start()
+                os.dup2(nativeLog.fileno(), 1)
+                os.dup2(nativeLog.fileno(), 2)
+                yield
+        finally:
+            sys.stdout.flush()
+            sys.stderr.flush()
+            libc.fflush(None)
+            if streamStopEvent is not None:
+                streamStopEvent.set()
+            if streamThread is not None:
+                streamThread.join(timeout=2.0)
+            os.dup2(stdoutFd, 1)
+            os.dup2(stderrFd, 2)
+            os.close(stdoutFd)
+            os.close(stderrFd)
+
+    @contextmanager
+    def redirectTemporaryNativeOutput(
+        self,
+        prefix: str = "gundam",
+        *,
+        stream: bool | None = None,
+        debug: bool | None = None,
+    ) -> Iterator[None]:
+        """Redirect native output to a temporary log file and delete it afterwards."""
+        stream = self.stream if stream is None else stream
+        debug = self.debug if debug is None else debug
+        with tempfile.NamedTemporaryFile(prefix=f"{prefix}_", suffix=".log", delete=False) as logFile:
+            logPath = Path(logFile.name)
+        if debug and isNotebookRuntime():
+            print(
+                "GUNDAM native output is redirected to temporary log file "
+                f"(auto-deleted after execution): {logPath}",
+                flush=True,
+            )
+
+        try:
+            with self.redirectNativeOutput(logPath, stream=stream):
+                yield
+        finally:
+            try:
+                if not stream and logPath.exists():
+                    logContent = logPath.read_text(encoding="utf-8", errors="replace")
+                    if logContent:
+                        print(logContent, end="" if logContent.endswith("\n") else "\n")
+            finally:
+                logPath.unlink(missing_ok=True)
+
+
 def redirectNativeOutput(
     logPath: str | os.PathLike[str],
     *,
     stream: bool = False,
     debug: bool = False,
 ) -> Iterator[None]:
-    """Redirect C/C++ stdout and stderr to a file.
-
-    This is useful in Jupyter where native C++ loggers can interact poorly with
-    ipykernel stdout capture. Python stdout/stderr are restored after the block.
-    When ``stream`` is true, new log content is also printed as it is written.
-    """
-    path = Path(logPath).expanduser()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if debug and isNotebookRuntime():
-        print(
-            f"GUNDAM native output is redirected to log file: {path}",
-            flush=True,
-        )
-
-    libc = ctypes.CDLL(None)
-    sys.stdout.flush()
-    sys.stderr.flush()
-    libc.fflush(None)
-
-    stdoutFd = os.dup(1)
-    stderrFd = os.dup(2)
-    streamStopEvent: threading.Event | None = None
-    streamThread: threading.Thread | None = None
-
-    try:
-        with path.open("ab", buffering=0) as nativeLog:
-            streamOffset = nativeLog.tell()
-            if stream:
-                streamStopEvent = threading.Event()
-                streamThread = threading.Thread(
-                    target=_streamLogFile,
-                    args=(path, streamStopEvent, streamOffset, stdoutFd),
-                    daemon=True,
-                )
-                streamThread.start()
-            os.dup2(nativeLog.fileno(), 1)
-            os.dup2(nativeLog.fileno(), 2)
-            yield
-    finally:
-        sys.stdout.flush()
-        sys.stderr.flush()
-        libc.fflush(None)
-        if streamStopEvent is not None:
-            streamStopEvent.set()
-        if streamThread is not None:
-            streamThread.join(timeout=2.0)
-        os.dup2(stdoutFd, 1)
-        os.dup2(stderrFd, 2)
-        os.close(stdoutFd)
-        os.close(stderrFd)
+    """Compatibility wrapper around :class:`GundamLogRedirector`."""
+    return GundamLogRedirector(stream=stream, debug=debug).redirectNativeOutput(logPath)
 
 
 def maybeRedirectNativeOutput(
@@ -153,34 +202,16 @@ def maybeRedirectNativeOutput(
     )
 
 
-@contextmanager
 def temporaryRedirectNativeOutput(
     prefix: str = "gundam",
     *,
     stream: bool = False,
     debug: bool = False,
 ) -> Iterator[None]:
-    """Redirect native output to a temporary log file and delete it afterwards."""
-    with tempfile.NamedTemporaryFile(prefix=f"{prefix}_", suffix=".log", delete=False) as logFile:
-        logPath = Path(logFile.name)
-    if debug and isNotebookRuntime():
-        print(
-            "GUNDAM native output is redirected to temporary log file "
-            f"(auto-deleted after execution): {logPath}",
-            flush=True,
-        )
-
-    try:
-        with redirectNativeOutput(logPath, stream=stream):
-            yield
-    finally:
-        try:
-            if not stream and logPath.exists():
-                logContent = logPath.read_text(encoding="utf-8", errors="replace")
-                if logContent:
-                    print(logContent, end="" if logContent.endswith("\n") else "\n")
-        finally:
-            logPath.unlink(missing_ok=True)
+    """Compatibility wrapper around :class:`GundamLogRedirector`."""
+    return GundamLogRedirector(stream=stream, debug=debug).redirectTemporaryNativeOutput(
+        prefix=prefix,
+    )
 
 
 def _streamLogFile(
