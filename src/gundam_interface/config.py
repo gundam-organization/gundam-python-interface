@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .loader import GundamLoader
+
 
 @dataclass(slots=True)
 class GundamRuntime:
@@ -18,9 +20,12 @@ class GundamRuntime:
     forceAsimov: bool | None = None
     dataType: str | None = None
     randomSeed: int | None = None
+    loader: GundamLoader = field(default_factory=GundamLoader)
 
     def __post_init__(self) -> None:
         self.workDir = Path(self.workDir).expanduser()
+        if isinstance(self.loader, dict):
+            self.loader = GundamLoader.fromDict(self.loader)
         if self.configPath is not None:
             self.configPath = Path(self.configPath).expanduser()
         self.overrideList = [Path(path).expanduser() for path in self.overrideList]
@@ -48,6 +53,14 @@ class GundamRuntime:
             forceAsimov=data.get("forceAsimov", data.get("useAsimov")),
             dataType=data.get("dataType"),
             randomSeed=data.get("randomSeed", data.get("seed")),
+            loader=GundamLoader.fromDict(
+                data.get("loader")
+                or (
+                    {"pythonPath": data["pythonPath"]}
+                    if data.get("pythonPath") is not None
+                    else None
+                )
+            ),
         )
 
     @classmethod
@@ -60,6 +73,7 @@ class GundamRuntime:
             "nCpuThreads": self.nCpuThreads,
             "workDir": str(self.workDir),
             "dataType": self.dataType,
+            "loader": self.loader.toDict(),
         }
         if self.randomSeed is not None:
             data["randomSeed"] = self.randomSeed

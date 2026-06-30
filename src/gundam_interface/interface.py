@@ -10,7 +10,6 @@ from typing import Any, Iterator
 import numpy as np
 
 from .config import GundamRuntime
-from .loader import importGundam
 from .logging import maybeRedirectNativeOutput, temporaryRedirectNativeOutput
 from .parameters import (
     GundamParameter,
@@ -89,7 +88,7 @@ class GundamInterface:
 
     def importGundam(self):
         if self.gundam is None:
-            self.gundam = importGundam()
+            self.gundam = self.runtime.loader.importGundam()
         return self.gundam
 
     def configure(self, validatePaths: bool = True) -> None:
