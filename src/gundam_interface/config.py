@@ -10,9 +10,9 @@ from typing import Any
 class GundamContext:
     """Runtime context needed to construct the GUNDAM Python interface."""
 
-    nCpuThreads: int
     pythonPath: str | Path
     workDir: str | Path
+    nCpuThreads: int = 1
     configPath: str | Path | None = None
     overrideList: list[str | Path] = field(default_factory=list)
     configJsonString: str | None = None
