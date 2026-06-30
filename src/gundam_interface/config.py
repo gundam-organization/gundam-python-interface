@@ -7,10 +7,9 @@ from typing import Any
 
 
 @dataclass(slots=True)
-class GundamContext:
+class GundamRuntime:
     """Runtime context needed to construct the GUNDAM Python interface."""
 
-    pythonPath: str | Path
     workDir: str | Path
     nCpuThreads: int = 1
     configPath: str | Path | None = None
@@ -21,7 +20,6 @@ class GundamContext:
     randomSeed: int | None = None
 
     def __post_init__(self) -> None:
-        self.pythonPath = Path(self.pythonPath).expanduser()
         self.workDir = Path(self.workDir).expanduser()
         if self.configPath is not None:
             self.configPath = Path(self.configPath).expanduser()
@@ -40,11 +38,10 @@ class GundamContext:
         self.dataType = self._canonicalDataType(self.dataType, self.forceAsimov)
 
     @classmethod
-    def fromDict(cls, data: dict[str, Any]) -> "GundamContext":
+    def fromDict(cls, data: dict[str, Any]) -> "GundamRuntime":
         return cls(
-            nCpuThreads=int(data["nCpuThreads"]),
-            pythonPath=data["pythonPath"],
             workDir=data["workDir"],
+            nCpuThreads=int(data.get("nCpuThreads", 1)),
             configPath=data.get("configPath"),
             overrideList=list(data.get("overrideList", [])),
             configJsonString=data.get("configJsonString"),
@@ -54,14 +51,13 @@ class GundamContext:
         )
 
     @classmethod
-    def fromJsonFile(cls, path: str | Path) -> "GundamContext":
+    def fromJsonFile(cls, path: str | Path) -> "GundamRuntime":
         with Path(path).open("r", encoding="utf-8") as file:
             return cls.fromDict(json.load(file))
 
     def toDict(self, includeConfigJsonString: bool = True) -> dict[str, Any]:
         data = {
             "nCpuThreads": self.nCpuThreads,
-            "pythonPath": str(self.pythonPath),
             "workDir": str(self.workDir),
             "dataType": self.dataType,
         }
@@ -107,7 +103,7 @@ class GundamContext:
     @property
     def absoluteConfigPath(self) -> Path:
         if self.configPath is None:
-            raise ValueError("No configPath is defined for this GundamContext")
+            raise ValueError("No configPath is defined for this GundamRuntime")
         if self.configPath.is_absolute():
             return self.configPath
         return self.workDir / self.configPath
@@ -132,8 +128,6 @@ class GundamContext:
 
     def validatePaths(self) -> None:
         """Fail early on missing user-provided paths."""
-        if not self.pythonPath.exists():
-            raise FileNotFoundError(f"GUNDAM pythonPath does not exist: {self.pythonPath}")
         if not self.workDir.exists():
             raise FileNotFoundError(f"GUNDAM workDir does not exist: {self.workDir}")
         if self.configJsonString is not None:

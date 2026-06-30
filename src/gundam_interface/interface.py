@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import importlib
 import os
-import sys
 import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -11,7 +9,8 @@ from typing import Any, Iterator
 
 import numpy as np
 
-from .config import GundamContext
+from .config import GundamRuntime
+from .loader import importGundam
 from .logging import maybeRedirectNativeOutput, temporaryRedirectNativeOutput
 from .parameters import (
     GundamParameter,
@@ -55,9 +54,9 @@ def temporaryWorkingDirectory(path: str | os.PathLike[str]) -> Iterator[None]:
 class GundamInterface:
     """Thin Python wrapper around the GUNDAM fitting interface."""
 
-    def __init__(self, context: GundamContext):
-        self.context = context
-        self.gundam: Any | None = None
+    def __init__(self, runtime: GundamRuntime, gundam: Any | None = None):
+        self.runtime = runtime
+        self.gundam: Any | None = gundam
         self.configBuilder: Any | None = None
         self.configJsonString: str | None = None
         self.fitterEngineConfig: Any | None = None
@@ -88,30 +87,20 @@ class GundamInterface:
     def parameterNames(self) -> list[str]:
         return [parameter.name for parameter in self.parameters]
 
-    def setupPythonPath(self) -> None:
-        pythonPath = str(self.context.pythonPath)
-        if pythonPath not in sys.path:
-            sys.path.insert(0, pythonPath)
-
-        existingPythonPath = os.environ.get("PYTHONPATH", "")
-        pythonPathParts = [part for part in existingPythonPath.split(os.pathsep) if part]
-        if pythonPath not in pythonPathParts:
-            os.environ["PYTHONPATH"] = os.pathsep.join([pythonPath, *pythonPathParts])
-
     def importGundam(self):
-        self.setupPythonPath()
-        self.gundam = importlib.import_module("GUNDAM")
+        if self.gundam is None:
+            self.gundam = importGundam()
         return self.gundam
 
     def configure(self, validatePaths: bool = True) -> None:
         with preservedWorkingDirectory():
             if validatePaths:
-                self.context.validatePaths()
+                self.runtime.validatePaths()
 
             gundam = self.importGundam()
             gundam.setLightOutputMode(False)
-            gundam.setNumberOfThreads(self.context.nCpuThreads)
-            workingDirectory = Path(self.context.workDir).expanduser().resolve()
+            gundam.setNumberOfThreads(self.runtime.nCpuThreads)
+            workingDirectory = Path(self.runtime.workDir).expanduser().resolve()
             gundam.setRuntimeWorkingDirectory(str(workingDirectory))
 
             with temporaryWorkingDirectory(workingDirectory):
@@ -126,7 +115,7 @@ class GundamInterface:
 
             engine = gundam.FitterEngine()
             engine.setConfig(fitterEngineConfig)
-            self._setEngineRandomSeed(engine, self.context.randomSeed)
+            self._setEngineRandomSeed(engine, self.runtime.randomSeed)
             with temporaryWorkingDirectory(workingDirectory):
                 engine.configure()
 
@@ -136,13 +125,13 @@ class GundamInterface:
             self.engine = engine
 
     def _buildConfigBuilder(self, gundam):
-        if self.context.configJsonString is not None:
-            return self._buildConfigBuilderFromJsonString(gundam, self.context.configJsonString)
+        if self.runtime.configJsonString is not None:
+            return self._buildConfigBuilderFromJsonString(gundam, self.runtime.configJsonString)
 
-        configPath = Path(self.context.absoluteConfigPath).expanduser().resolve()
+        configPath = Path(self.runtime.absoluteConfigPath).expanduser().resolve()
         overridePaths = [
             Path(overridePath).expanduser().resolve()
-            for overridePath in self.context.absoluteOverridePaths
+            for overridePath in self.runtime.absoluteOverridePaths
         ]
         configBuilder = gundam.ConfigUtils.ConfigBuilder(str(configPath))
         for overridePath in overridePaths:
@@ -169,7 +158,7 @@ class GundamInterface:
     ) -> None:
         with preservedWorkingDirectory():
             self._requireConfigured()
-            workingDirectory = Path(self.context.workDir).expanduser().resolve()
+            workingDirectory = Path(self.runtime.workDir).expanduser().resolve()
 
             if logPath is None:
                 redirectContext = temporaryRedirectNativeOutput("gundam_initialize")
@@ -193,7 +182,7 @@ class GundamInterface:
         )
         self.parameters = collectActiveParameters(
             parametersManager,
-            includeThrowValues=self.context.dataType == "Toy",
+            includeThrowValues=self.runtime.dataType == "Toy",
         )
         return self.parameters
 
@@ -239,7 +228,7 @@ class GundamInterface:
 
             if logPath is not None:
                 logPath = Path(logPath).expanduser().resolve()
-            workingDirectory = Path(self.context.workDir).expanduser().resolve()
+            workingDirectory = Path(self.runtime.workDir).expanduser().resolve()
 
             with temporaryWorkingDirectory(workingDirectory):
                 with maybeRedirectNativeOutput(logPath):
@@ -254,7 +243,7 @@ class GundamInterface:
             self._requireParameters()
             if logPath is not None:
                 logPath = Path(logPath).expanduser().resolve()
-            workingDirectory = Path(self.context.workDir).expanduser().resolve()
+            workingDirectory = Path(self.runtime.workDir).expanduser().resolve()
 
             with temporaryWorkingDirectory(workingDirectory):
                 with maybeRedirectNativeOutput(logPath):
@@ -282,7 +271,7 @@ class GundamInterface:
             self._requireParameters()
             if nThrows < 1:
                 raise ValueError("nThrows must be >= 1")
-            workingDirectory = Path(self.context.workDir).expanduser().resolve()
+            workingDirectory = Path(self.runtime.workDir).expanduser().resolve()
 
             physicalValues = np.empty((nThrows, self.priors.shape[0]), dtype=np.float64)
             normalizedValues = np.empty_like(physicalValues)
@@ -316,7 +305,7 @@ class GundamInterface:
 
     def setSeed(self, seed: int | None = None) -> None:
         self._requireConfigured()
-        seed = self.context.randomSeed if seed is None else seed
+        seed = self.runtime.randomSeed if seed is None else seed
         self._setEngineRandomSeed(self.engine, seed)
 
     @staticmethod
@@ -336,7 +325,7 @@ class GundamInterface:
         self._requireConfigured()
         gundam = self.importGundam()
         likelihoodInterface = self.engine.getLikelihoodInterface()
-        dataType = getattr(gundam.LikelihoodInterface.DataType, self.context.dataType)
+        dataType = getattr(gundam.LikelihoodInterface.DataType, self.runtime.dataType)
         likelihoodInterface.setDataType(dataType)
 
     def _requireParameters(self) -> None:
