@@ -1,4 +1,4 @@
-# gundam-interface
+# Python Interface for GUNDAM
 
 User friendly Python interface for GUNDAM.
 
