@@ -29,14 +29,14 @@ def test_gundam_runtime_serialization_excludes_python_path(tmp_path) -> None:
         workDir=tmp_path,
         configPath="config.yaml",
         overrideList=["override.yaml"],
-        loader=gundam_interface.GundamLoader(pythonPath=tmp_path / "gundam-lib"),
+        loader=gundam_interface.GundamLoader(gundamLibPath=tmp_path / "gundam-lib"),
     )
 
     data = runtime.toDict()
 
     assert "pythonPath" not in data
     assert data["nCpuThreads"] == 1
-    assert data["loader"]["pythonPath"] == str(tmp_path / "gundam-lib")
+    assert data["loader"]["gundamLibPath"] == str(tmp_path / "gundam-lib")
 
 
 def test_gundam_runtime_loads_legacy_python_path_into_loader(tmp_path) -> None:
@@ -48,4 +48,16 @@ def test_gundam_runtime_loads_legacy_python_path_into_loader(tmp_path) -> None:
         }
     )
 
-    assert runtime.loader.pythonPath == tmp_path / "gundam-lib"
+    assert runtime.loader.gundamLibPath == tmp_path / "gundam-lib"
+
+
+def test_gundam_runtime_loads_gundam_lib_path_into_loader(tmp_path) -> None:
+    runtime = gundam_interface.GundamRuntime.fromDict(
+        {
+            "gundamLibPath": str(tmp_path / "gundam-lib"),
+            "workDir": str(tmp_path),
+            "configPath": "config.yaml",
+        }
+    )
+
+    assert runtime.loader.gundamLibPath == tmp_path / "gundam-lib"

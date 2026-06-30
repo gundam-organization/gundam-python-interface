@@ -56,7 +56,9 @@ class GundamRuntime:
             loader=GundamLoader.fromDict(
                 data.get("loader")
                 or (
-                    {"pythonPath": data["pythonPath"]}
+                    {"gundamLibPath": data["gundamLibPath"]}
+                    if data.get("gundamLibPath") is not None
+                    else {"pythonPath": data["pythonPath"]}
                     if data.get("pythonPath") is not None
                     else None
                 )

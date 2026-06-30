@@ -12,17 +12,17 @@ from types import ModuleType
 class GundamLoader:
     """Loader responsible for making the GUNDAM Python bindings importable."""
 
-    pythonPath: str | os.PathLike[str] | None = None
+    gundamLibPath: str | os.PathLike[str] | None = None
     moduleName: str = "GUNDAM"
 
     def __post_init__(self) -> None:
-        if self.pythonPath is not None:
-            self.pythonPath = Path(self.pythonPath).expanduser()
+        if self.gundamLibPath is not None:
+            self.gundamLibPath = Path(self.gundamLibPath).expanduser()
 
     def setupPythonPath(self) -> Path | None:
-        if self.pythonPath is None:
+        if self.gundamLibPath is None:
             return None
-        path = Path(self.pythonPath).expanduser()
+        path = Path(self.gundamLibPath).expanduser()
         pathString = str(path)
 
         if pathString not in sys.path:
@@ -41,8 +41,8 @@ class GundamLoader:
 
     def toDict(self) -> dict[str, str]:
         data = {"moduleName": self.moduleName}
-        if self.pythonPath is not None:
-            data["pythonPath"] = str(self.pythonPath)
+        if self.gundamLibPath is not None:
+            data["gundamLibPath"] = str(self.gundamLibPath)
         return data
 
     @classmethod
@@ -50,6 +50,6 @@ class GundamLoader:
         if data is None:
             return cls()
         return cls(
-            pythonPath=data.get("pythonPath"),
+            gundamLibPath=data.get("gundamLibPath", data.get("pythonPath")),
             moduleName=data.get("moduleName", "GUNDAM"),
         )
