@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .loader import GundamLoader
+from .logging import GundamLogRedirector
 
 
 @dataclass(slots=True)
@@ -59,6 +60,10 @@ class GundamRuntime:
     forceAsimov: bool | None = None
     dataType: str | None = None
     randomSeed: int | None = None
+    logRedirector: GundamLogRedirector = field(
+        init=False,
+        default_factory=GundamLogRedirector,
+    )
 
     def __post_init__(self) -> None:
         self.workDir = Path(self.workDir).expanduser()

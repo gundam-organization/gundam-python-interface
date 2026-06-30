@@ -7,6 +7,7 @@ import tempfile
 import threading
 import time
 from contextlib import contextmanager, nullcontext
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
 
@@ -29,6 +30,50 @@ def isNotebookRuntime() -> bool:
     config = getattr(shell, "config", {})
     return "IPKernelApp" in config
 
+
+@dataclass(slots=True)
+class GundamLogRedirector:
+    """Policy object for GUNDAM native stdout/stderr redirection.
+
+    Regular Python scripts keep native output untouched by default, so GUNDAM
+    ``cout`` and ``cerr`` are displayed live. Notebook runtimes redirect native
+    output through a temporary file by default because direct C/C++ output can
+    bypass or confuse frontend capture.
+
+    Parameters
+    ----------
+    redirectNotebookOutput:
+        Redirect native output through an auto-deleted temporary file when
+        running in a notebook and no explicit log path is provided.
+    stream:
+        Stream redirected output while the GUNDAM call is running. If false,
+        temporary notebook logs are printed after the call completes.
+    debug:
+        Print redirection diagnostics in notebooks.
+    """
+
+    redirectNotebookOutput: bool = True
+    stream: bool = False
+    debug: bool = False
+
+    def redirect(
+        self,
+        logPath: str | os.PathLike[str] | None = None,
+        *,
+        prefix: str = "gundam",
+        stream: bool | None = None,
+        debug: bool | None = None,
+    ):
+        """Return a context manager for the configured redirection policy."""
+        stream = self.stream if stream is None else stream
+        debug = self.debug if debug is None else debug
+
+        if logPath is None:
+            if not (self.redirectNotebookOutput and isNotebookRuntime()):
+                return nullcontext()
+            return temporaryRedirectNativeOutput(prefix=prefix, stream=stream, debug=debug)
+
+        return redirectNativeOutput(logPath, stream=stream, debug=debug)
 
 @contextmanager
 def redirectNativeOutput(
@@ -102,11 +147,10 @@ def maybeRedirectNativeOutput(
     untouched. Notebook runtimes redirect through a temporary file so native
     output is captured reliably by the frontend.
     """
-    if logPath is None:
-        if not isNotebookRuntime():
-            return nullcontext()
-        return temporaryRedirectNativeOutput(prefix=prefix, stream=stream, debug=debug)
-    return redirectNativeOutput(logPath, stream=stream, debug=debug)
+    return GundamLogRedirector(stream=stream, debug=debug).redirect(
+        logPath,
+        prefix=prefix,
+    )
 
 
 @contextmanager
