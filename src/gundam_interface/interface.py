@@ -227,16 +227,10 @@ class GundamInterface:
             if physicalValues is not None:
                 self.setParameterValues(physicalValues)
 
-            if logPath is not None:
-                logPath = Path(logPath).expanduser().resolve()
             workingDirectory = Path(self.runtime.workDir).expanduser().resolve()
 
             with temporaryWorkingDirectory(workingDirectory):
-                with self.runtime.logRedirector.redirect(
-                    logPath,
-                    prefix="gundam_evaluate",
-                ):
-                    self.engine.getLikelihoodInterface().propagateAndEvalLikelihood()
+                self.engine.getLikelihoodInterface().propagateAndEvalLikelihood()
                 return float(self.engine.getLikelihoodInterface().getLastLikelihood())
 
     def minimize(
@@ -245,16 +239,10 @@ class GundamInterface:
     ) -> float:
         with preservedWorkingDirectory():
             self._requireParameters()
-            if logPath is not None:
-                logPath = Path(logPath).expanduser().resolve()
             workingDirectory = Path(self.runtime.workDir).expanduser().resolve()
 
             with temporaryWorkingDirectory(workingDirectory):
-                with self.runtime.logRedirector.redirect(
-                    logPath,
-                    prefix="gundam_minimize",
-                ):
-                    self.engine.getMinimizer().minimize()
+                self.engine.getMinimizer().minimize()
 
             self.refreshParameters()
             return float(self.engine.getLikelihoodInterface().getLastLikelihood())

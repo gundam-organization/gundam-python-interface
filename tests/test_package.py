@@ -1,5 +1,6 @@
 from importlib.metadata import version
 from inspect import signature
+from contextlib import contextmanager
 
 import gundam_interface
 from gundam_interface.logging import GundamLogRedirector
@@ -69,6 +70,68 @@ def test_gundam_interface_methods_do_not_expose_log_debug_option() -> None:
     assert "debugLogRedirection" not in signature(gundam_interface.GundamInterface.initialize).parameters
     assert "debugLogRedirection" not in signature(gundam_interface.GundamInterface.evaluateLlh).parameters
     assert "debugLogRedirection" not in signature(gundam_interface.GundamInterface.minimize).parameters
+
+
+def test_evaluate_llh_does_not_auto_redirect_without_log_path(tmp_path) -> None:
+    likelihoodInterface = FakeEvaluatingLikelihoodInterface(llh=12.5)
+    interface = makeConfiguredInterface(tmp_path, FakeEngine(likelihoodInterface))
+    redirector = RecordingRedirector()
+    interface.runtime.logRedirector = redirector
+
+    llh = interface.evaluateLlh()
+
+    assert llh == 12.5
+    assert likelihoodInterface.evaluationCount == 1
+    assert redirector.calls == []
+
+
+def test_evaluate_llh_does_not_redirect_with_log_path(tmp_path) -> None:
+    likelihoodInterface = FakeEvaluatingLikelihoodInterface(llh=12.5)
+    interface = makeConfiguredInterface(tmp_path, FakeEngine(likelihoodInterface))
+    redirector = RecordingRedirector()
+    interface.runtime.logRedirector = redirector
+
+    llh = interface.evaluateLlh(logPath=tmp_path / "evaluate.log")
+
+    assert llh == 12.5
+    assert likelihoodInterface.evaluationCount == 1
+    assert redirector.calls == []
+
+
+def test_minimize_does_not_auto_redirect_without_log_path(tmp_path) -> None:
+    likelihoodInterface = FakeEvaluatingLikelihoodInterface(llh=4.0)
+    minimizer = FakeRecordingMinimizer()
+    interface = makeConfiguredInterface(
+        tmp_path,
+        FakeEngineWithLikelihoodAndMinimizer(likelihoodInterface, minimizer),
+    )
+    interface.refreshParameters = lambda: interface.parameters
+    redirector = RecordingRedirector()
+    interface.runtime.logRedirector = redirector
+
+    llh = interface.minimize()
+
+    assert llh == 4.0
+    assert minimizer.minimizeCount == 1
+    assert redirector.calls == []
+
+
+def test_minimize_does_not_redirect_with_log_path(tmp_path) -> None:
+    likelihoodInterface = FakeEvaluatingLikelihoodInterface(llh=4.0)
+    minimizer = FakeRecordingMinimizer()
+    interface = makeConfiguredInterface(
+        tmp_path,
+        FakeEngineWithLikelihoodAndMinimizer(likelihoodInterface, minimizer),
+    )
+    interface.refreshParameters = lambda: interface.parameters
+    redirector = RecordingRedirector()
+    interface.runtime.logRedirector = redirector
+
+    llh = interface.minimize(logPath=tmp_path / "minimize.log")
+
+    assert llh == 4.0
+    assert minimizer.minimizeCount == 1
+    assert redirector.calls == []
 
 
 def test_gundam_samples_exposes_histogram_sum_weights() -> None:
@@ -176,6 +239,18 @@ class FakePropagator:
         return self._sampleSet
 
 
+class FakeEvaluatingLikelihoodInterface:
+    def __init__(self, llh) -> None:
+        self._llh = llh
+        self.evaluationCount = 0
+
+    def propagateAndEvalLikelihood(self) -> None:
+        self.evaluationCount += 1
+
+    def getLastLikelihood(self):
+        return self._llh
+
+
 class FakeLikelihoodInterface:
     def __init__(self, modelPropagator, dataPropagator) -> None:
         self._modelPropagator = modelPropagator
@@ -196,6 +271,14 @@ class FakeEngine:
         return self._likelihoodInterface
 
 
+class FakeRecordingMinimizer:
+    def __init__(self) -> None:
+        self.minimizeCount = 0
+
+    def minimize(self) -> None:
+        self.minimizeCount += 1
+
+
 class FakeMinimizer:
     def __init__(self, fitParameters) -> None:
         self._fitParameters = fitParameters
@@ -210,6 +293,42 @@ class FakeEngineWithMinimizer:
 
     def getMinimizer(self):
         return self._minimizer
+
+
+class FakeEngineWithLikelihoodAndMinimizer:
+    def __init__(self, likelihoodInterface, minimizer) -> None:
+        self._likelihoodInterface = likelihoodInterface
+        self._minimizer = minimizer
+
+    def getLikelihoodInterface(self):
+        return self._likelihoodInterface
+
+    def getMinimizer(self):
+        return self._minimizer
+
+
+class RecordingRedirector:
+    def __init__(self) -> None:
+        self.calls = []
+
+    @contextmanager
+    def redirect(self, logPath=None, *, prefix="gundam", stream=None):
+        self.calls.append((logPath, prefix))
+        yield
+
+
+def makeConfiguredInterface(tmp_path, engine):
+    interface = gundam_interface.GundamInterface(
+        runtime=gundam_interface.GundamRuntime(
+            workDir=tmp_path,
+            loader=gundam_interface.GundamLoader(),
+            configPath="config.yaml",
+        ),
+        gundam=None,
+    )
+    interface.engine = engine
+    interface.parameters = [object()]
+    return interface
 
 
 def test_gundam_runtime_loads_gundam_lib_path_into_loader(tmp_path) -> None:
