@@ -181,8 +181,8 @@ class GundamInterface:
             )
 
             with temporaryWorkingDirectory(workingDirectory):
+                self._setLikelihoodDataType()
                 with redirectContext:
-                    self._setLikelihoodDataType()
                     self.engine.initialize()
 
             self.refreshParameters()
