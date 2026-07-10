@@ -1,6 +1,9 @@
 from importlib.metadata import version
 from inspect import signature
 from contextlib import contextmanager
+import sys
+
+import pytest
 
 import gundam_interface
 from gundam_interface.logging import GundamLogRedirector
@@ -52,6 +55,56 @@ def test_gundam_runtime_serialization_excludes_python_path(tmp_path) -> None:
     assert "logRedirector" not in data
     assert data["nCpuThreads"] == 1
     assert data["loader"]["gundamLibPath"] == str(tmp_path / "gundam-lib")
+
+
+def test_gundam_runtime_serializes_output_root_state(tmp_path) -> None:
+    runtime = gundam_interface.GundamRuntime(
+        workDir=tmp_path,
+        configPath="config.yaml",
+        outputRootPath="fit.root",
+        loadPostFitState=True,
+        loader=gundam_interface.GundamLoader(),
+    )
+
+    data = runtime.toDict()
+    restored = gundam_interface.GundamRuntime.fromDict(data)
+
+    assert data["configPath"] == "config.yaml"
+    assert data["outputRootPath"] == "fit.root"
+    assert data["loadPostFitState"] is True
+    assert restored.configPath == runtime.configPath
+    assert restored.outputRootPath == runtime.outputRootPath
+    assert restored.loadPostFitState is True
+
+
+def test_gundam_runtime_accepts_output_root_as_config_source(tmp_path) -> None:
+    runtime = gundam_interface.GundamRuntime(
+        workDir=tmp_path,
+        outputRootPath="fit.root",
+        loader=gundam_interface.GundamLoader(),
+    )
+
+    assert runtime.absoluteOutputRootPath == tmp_path / "fit.root"
+
+
+def test_gundam_runtime_rejects_load_postfit_without_output_root(tmp_path) -> None:
+    with pytest.raises(ValueError, match="outputRootPath"):
+        gundam_interface.GundamRuntime(
+            workDir=tmp_path,
+            configPath="config.yaml",
+            loadPostFitState=True,
+            loader=gundam_interface.GundamLoader(),
+        )
+
+
+def test_gundam_runtime_rejects_config_path_and_json_string(tmp_path) -> None:
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        gundam_interface.GundamRuntime(
+            workDir=tmp_path,
+            configPath="config.yaml",
+            configJsonString="{}",
+            loader=gundam_interface.GundamLoader(),
+        )
 
 
 def test_gundam_runtime_owns_log_redirector(tmp_path) -> None:
@@ -188,6 +241,122 @@ def test_gundam_interface_exposes_minimizer_fit_parameters(tmp_path) -> None:
     assert interface.minimizerFitParameters is fitParameters
 
 
+def test_build_config_builder_prefers_config_path_over_output_root(tmp_path) -> None:
+    (tmp_path / "config.yaml").write_text("config", encoding="utf-8")
+    (tmp_path / "fit.root").write_text("root", encoding="utf-8")
+    (tmp_path / "override.yaml").write_text("override", encoding="utf-8")
+    fakeGundam = FakeGundamModule()
+    interface = gundam_interface.GundamInterface(
+        runtime=gundam_interface.GundamRuntime(
+            workDir=tmp_path,
+            loader=gundam_interface.GundamLoader(),
+            configPath="config.yaml",
+            outputRootPath="fit.root",
+            overrideList=["override.yaml"],
+        ),
+        gundam=fakeGundam,
+    )
+
+    configBuilder = interface._buildConfigBuilder(fakeGundam)
+
+    assert configBuilder.source == str((tmp_path / "config.yaml").resolve())
+    assert configBuilder.overrides == [str((tmp_path / "override.yaml").resolve())]
+
+
+def test_build_config_builder_uses_output_root_when_no_config_path(tmp_path) -> None:
+    (tmp_path / "fit.root").write_text("root", encoding="utf-8")
+    fakeGundam = FakeGundamModule()
+    interface = gundam_interface.GundamInterface(
+        runtime=gundam_interface.GundamRuntime(
+            workDir=tmp_path,
+            loader=gundam_interface.GundamLoader(),
+            outputRootPath="fit.root",
+        ),
+        gundam=fakeGundam,
+    )
+
+    configBuilder = interface._buildConfigBuilder(fakeGundam)
+
+    assert configBuilder.source == str((tmp_path / "fit.root").resolve())
+
+
+def test_initialize_loads_postfit_state_when_requested(tmp_path, monkeypatch) -> None:
+    outputRootPath = tmp_path / "fit.root"
+    outputRootPath.write_text("root", encoding="utf-8")
+    fakeParametersManager = FakeInjectingParametersManager()
+    installFakeUproot(
+        monkeypatch,
+        {
+            "FitterEngine/postFit/Migrad/parameterStateAfterMinimize_TNamed": FakeTNamed(
+                '{"parameterSetList":[]}'
+            )
+        },
+    )
+    fakeGundam = FakeGundamModule()
+    interface = gundam_interface.GundamInterface(
+        runtime=gundam_interface.GundamRuntime(
+            workDir=tmp_path,
+            loader=gundam_interface.GundamLoader(),
+            configPath="config.yaml",
+            outputRootPath=outputRootPath,
+            loadPostFitState=True,
+        ),
+        gundam=fakeGundam,
+    )
+    interface.engine = FakeInitializableEngine(fakeParametersManager)
+    interface.refreshParameters = lambda: interface.parameters
+
+    interface.initialize()
+
+    assert interface.engine.initializeCount == 1
+    assert len(fakeParametersManager.injectedConfigs) == 1
+    assert fakeParametersManager.injectedConfigs[0].startswith("config:")
+
+
+def test_initialize_does_not_load_postfit_state_by_default(tmp_path) -> None:
+    outputRootPath = tmp_path / "fit.root"
+    outputRootPath.write_text("root", encoding="utf-8")
+    fakeParametersManager = FakeInjectingParametersManager()
+    fakeGundam = FakeGundamModule()
+    interface = gundam_interface.GundamInterface(
+        runtime=gundam_interface.GundamRuntime(
+            workDir=tmp_path,
+            loader=gundam_interface.GundamLoader(),
+            configPath="config.yaml",
+            outputRootPath=outputRootPath,
+        ),
+        gundam=fakeGundam,
+    )
+    interface.engine = FakeInitializableEngine(fakeParametersManager)
+    interface.refreshParameters = lambda: interface.parameters
+
+    interface.initialize()
+
+    assert fakeParametersManager.injectedConfigs == []
+
+
+def test_initialize_fails_when_requested_postfit_state_is_missing(tmp_path, monkeypatch) -> None:
+    outputRootPath = tmp_path / "fit.root"
+    outputRootPath.write_text("root", encoding="utf-8")
+    installFakeUproot(monkeypatch, {})
+    fakeGundam = FakeGundamModule()
+    interface = gundam_interface.GundamInterface(
+        runtime=gundam_interface.GundamRuntime(
+            workDir=tmp_path,
+            loader=gundam_interface.GundamLoader(),
+            configPath="config.yaml",
+            outputRootPath=outputRootPath,
+            loadPostFitState=True,
+        ),
+        gundam=fakeGundam,
+    )
+    interface.engine = FakeInitializableEngine(FakeInjectingParametersManager())
+    interface.refreshParameters = lambda: interface.parameters
+
+    with pytest.raises(KeyError, match="parameterStateAfterMinimize_TNamed"):
+        interface.initialize()
+
+
 def test_gundam_runtime_loads_legacy_python_path_into_loader(tmp_path) -> None:
     runtime = gundam_interface.GundamRuntime.fromDict(
         {
@@ -237,6 +406,119 @@ class FakePropagator:
 
     def getSampleSet(self):
         return self._sampleSet
+
+
+class FakeConfigBuilder:
+    def __init__(self, source=None) -> None:
+        self.source = source
+        self.overrides = []
+
+    def override(self, path) -> None:
+        self.overrides.append(path)
+
+    def getConfig(self):
+        return f"config:{self.source or ''}"
+
+    def toString(self):
+        return f"config-string:{self.source or ''}"
+
+
+class FakeConfigUtils:
+    ConfigBuilder = FakeConfigBuilder
+
+
+class FakeDataType:
+    Asimov = "Asimov"
+    Toy = "Toy"
+    RealData = "RealData"
+
+
+class FakeGundamLikelihoodInterfaceNamespace:
+    DataType = FakeDataType
+
+
+class FakeTNamed:
+    def __init__(self, title) -> None:
+        self._title = title
+
+    def member(self, name):
+        if name != "fTitle":
+            raise KeyError(name)
+        return self._title
+
+
+class FakeUprootFile:
+    def __init__(self, objects) -> None:
+        self._objects = objects
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        return False
+
+    def __getitem__(self, objectPath):
+        return self._objects[objectPath]
+
+
+class FakeUprootModule:
+    def __init__(self, objects) -> None:
+        self._objects = objects
+
+    def open(self, path):
+        return FakeUprootFile(self._objects)
+
+
+def installFakeUproot(monkeypatch, objects) -> None:
+    monkeypatch.setitem(sys.modules, "uproot", FakeUprootModule(objects))
+
+
+class FakeGundamModule:
+    ConfigUtils = FakeConfigUtils
+    LikelihoodInterface = FakeGundamLikelihoodInterfaceNamespace
+
+    def __init__(self) -> None:
+        pass
+
+
+class FakeInjectingParametersManager:
+    def __init__(self) -> None:
+        self.injectedConfigs = []
+
+    def injectParameterValues(self, config) -> None:
+        self.injectedConfigs.append(config)
+
+
+class FakeStatePropagator:
+    def __init__(self, parametersManager) -> None:
+        self._parametersManager = parametersManager
+
+    def getParametersManager(self):
+        return self._parametersManager
+
+
+class FakeStateLikelihoodInterface:
+    def __init__(self, parametersManager) -> None:
+        self._modelPropagator = FakeStatePropagator(parametersManager)
+        self.dataType = None
+
+    def setDataType(self, dataType) -> None:
+        self.dataType = dataType
+
+    def getModelPropagator(self):
+        return self._modelPropagator
+
+
+class FakeInitializableEngine:
+    def __init__(self, parametersManager) -> None:
+        self._likelihoodInterface = FakeStateLikelihoodInterface(parametersManager)
+        self.initializeCount = 0
+
+    def initialize(self) -> None:
+        self.initializeCount += 1
+
+    def getLikelihoodInterface(self):
+        return self._likelihoodInterface
 
 
 class FakeEvaluatingLikelihoodInterface:

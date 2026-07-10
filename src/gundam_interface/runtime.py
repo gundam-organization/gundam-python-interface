@@ -21,9 +21,11 @@ class GundamRuntime:
     configuration source, override files, data mode, thread count, and optional
     random seed.
 
-    The runtime accepts either a configuration file path relative to ``workDir``
-    or an already-built JSON configuration string. Override paths are resolved
-    relative to ``workDir`` unless they are absolute.
+    The runtime accepts a configuration file path relative to ``workDir``, an
+    already-built JSON configuration string, or a GUNDAM ROOT output file.
+    ``configPath`` takes priority over ``outputRootPath`` as the configuration
+    source when both are provided. Override paths are resolved relative to
+    ``workDir`` unless they are absolute.
 
     Parameters
     ----------
@@ -36,11 +38,20 @@ class GundamRuntime:
         Number of CPU threads to request from GUNDAM. Defaults to 1.
     configPath:
         Path to the base GUNDAM config file, relative to ``workDir`` or
-        absolute. Mutually exclusive with ``configJsonString``.
+        absolute. Mutually exclusive with ``configJsonString``. Takes priority
+        over ``outputRootPath`` as the configuration source.
     overrideList:
-        Sequence of override config files applied after ``configPath``.
+        Sequence of override config files applied after the base config source.
     configJsonString:
         Serialized GUNDAM JSON config. Mutually exclusive with ``configPath``.
+    outputRootPath:
+        Path to a GUNDAM ROOT output file, relative to ``workDir`` or absolute.
+        Used as the configuration source when neither ``configPath`` nor
+        ``configJsonString`` is set, and as the post-fit state source when
+        ``loadPostFitState`` is true.
+    loadPostFitState:
+        Load and inject the post-fit parameter state from ``outputRootPath``
+        after engine initialization. Defaults to ``False``.
     forceAsimov:
         Backward-compatible way to choose Asimov or real data when ``dataType``
         is omitted.
@@ -57,6 +68,8 @@ class GundamRuntime:
     configPath: str | Path | None = None
     overrideList: list[str | Path] = field(default_factory=list)
     configJsonString: str | None = None
+    outputRootPath: str | Path | None = None
+    loadPostFitState: bool = False
     forceAsimov: bool | None = None
     dataType: str | None = None
     randomSeed: int | None = None
@@ -71,9 +84,12 @@ class GundamRuntime:
             self.loader = GundamLoader.fromDict(self.loader)
         if self.configPath is not None:
             self.configPath = Path(self.configPath).expanduser()
+        if self.outputRootPath is not None:
+            self.outputRootPath = Path(self.outputRootPath).expanduser()
         self.overrideList = [Path(path).expanduser() for path in self.overrideList]
         if self.configJsonString is not None:
             self.configJsonString = self.configJsonString.strip()
+        self.loadPostFitState = bool(self.loadPostFitState)
 
         if self.nCpuThreads < 1:
             raise ValueError("nCpuThreads must be >= 1")
@@ -81,8 +97,18 @@ class GundamRuntime:
             self.randomSeed = int(self.randomSeed)
             if self.randomSeed < 0:
                 raise ValueError("randomSeed must be >= 0")
-        if self.configPath is None and self.configJsonString is None:
-            raise ValueError("Either configPath or configJsonString must be provided")
+        if self.configPath is not None and self.configJsonString is not None:
+            raise ValueError("configPath and configJsonString are mutually exclusive")
+        if (
+            self.configPath is None
+            and self.configJsonString is None
+            and self.outputRootPath is None
+        ):
+            raise ValueError(
+                "Either configPath, configJsonString, or outputRootPath must be provided"
+            )
+        if self.loadPostFitState and self.outputRootPath is None:
+            raise ValueError("outputRootPath must be provided when loadPostFitState is True")
         self.dataType = self._canonicalDataType(self.dataType, self.forceAsimov)
 
     @classmethod
@@ -99,6 +125,8 @@ class GundamRuntime:
             configPath=data.get("configPath"),
             overrideList=list(data.get("overrideList", [])),
             configJsonString=data.get("configJsonString"),
+            outputRootPath=data.get("outputRootPath"),
+            loadPostFitState=bool(data.get("loadPostFitState", False)),
             forceAsimov=data.get("forceAsimov", data.get("useAsimov")),
             dataType=data.get("dataType"),
             randomSeed=data.get("randomSeed", data.get("seed")),
@@ -138,12 +166,16 @@ class GundamRuntime:
         }
         if self.randomSeed is not None:
             data["randomSeed"] = self.randomSeed
+        if self.outputRootPath is not None:
+            data["outputRootPath"] = str(self.outputRootPath)
+        if self.loadPostFitState:
+            data["loadPostFitState"] = self.loadPostFitState
         if self.configJsonString is not None:
             if includeConfigJsonString:
                 data["configJsonString"] = self.configJsonString
-        else:
+        elif self.configPath is not None:
             data["configPath"] = str(self.configPath)
-            data["overrideList"] = [str(path) for path in self.overrideList]
+        data["overrideList"] = [str(path) for path in self.overrideList]
         return data
 
     def toJsonFile(self, path: str | Path) -> None:
@@ -186,6 +218,15 @@ class GundamRuntime:
         return self.workDir / self.configPath
 
     @property
+    def absoluteOutputRootPath(self) -> Path:
+        """Resolved GUNDAM ROOT output path."""
+        if self.outputRootPath is None:
+            raise ValueError("No outputRootPath is defined for this GundamRuntime")
+        if self.outputRootPath.is_absolute():
+            return self.outputRootPath
+        return self.workDir / self.outputRootPath
+
+    @property
     def absoluteOverridePaths(self) -> list[Path]:
         """Resolved override config paths."""
         overridePaths = []
@@ -210,10 +251,12 @@ class GundamRuntime:
         """Fail early when user-provided filesystem paths do not exist."""
         if not self.workDir.exists():
             raise FileNotFoundError(f"GUNDAM workDir does not exist: {self.workDir}")
-        if self.configJsonString is not None:
-            return
-        if not self.absoluteConfigPath.exists():
+        if self.configPath is not None and not self.absoluteConfigPath.exists():
             raise FileNotFoundError(f"GUNDAM config file does not exist: {self.absoluteConfigPath}")
+        if self.outputRootPath is not None and not self.absoluteOutputRootPath.exists():
+            raise FileNotFoundError(
+                f"GUNDAM output ROOT file does not exist: {self.absoluteOutputRootPath}"
+            )
         for overridePath in self.absoluteOverridePaths:
             if not overridePath.exists():
                 raise FileNotFoundError(f"GUNDAM override file does not exist: {overridePath}")

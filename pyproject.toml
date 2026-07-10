@@ -29,7 +29,8 @@ classifiers = [
 ]
 dependencies = [
   "numpy",
-  "tqdm"
+  "tqdm",
+  "uproot"
 ]
 
 [project.optional-dependencies]

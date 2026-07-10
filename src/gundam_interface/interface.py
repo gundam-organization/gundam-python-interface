@@ -16,6 +16,7 @@ from .parameters import (
     parameterSteps,
     parameterThrowValues,
 )
+from .root_state import GundamRootStateReader
 from .runtime import GundamRuntime
 from .samples import GundamSamples
 
@@ -139,14 +140,21 @@ class GundamInterface:
 
     def _buildConfigBuilder(self, gundam):
         if self.runtime.configJsonString is not None:
-            return self._buildConfigBuilderFromJsonString(gundam, self.runtime.configJsonString)
+            configBuilder = self._buildConfigBuilderFromJsonString(
+                gundam,
+                self.runtime.configJsonString,
+            )
+        elif self.runtime.configPath is not None:
+            configPath = Path(self.runtime.absoluteConfigPath).expanduser().resolve()
+            configBuilder = gundam.ConfigUtils.ConfigBuilder(str(configPath))
+        else:
+            outputRootPath = Path(self.runtime.absoluteOutputRootPath).expanduser().resolve()
+            configBuilder = gundam.ConfigUtils.ConfigBuilder(str(outputRootPath))
 
-        configPath = Path(self.runtime.absoluteConfigPath).expanduser().resolve()
         overridePaths = [
             Path(overridePath).expanduser().resolve()
             for overridePath in self.runtime.absoluteOverridePaths
         ]
-        configBuilder = gundam.ConfigUtils.ConfigBuilder(str(configPath))
         for overridePath in overridePaths:
             configBuilder.override(str(overridePath))
         return configBuilder
@@ -184,8 +192,23 @@ class GundamInterface:
                 self._setLikelihoodDataType()
                 with redirectContext:
                     self.engine.initialize()
+                self._loadPostFitStateIfRequested()
 
             self.refreshParameters()
+
+    def _loadPostFitStateIfRequested(self) -> None:
+        if not self.runtime.loadPostFitState:
+            return
+
+        gundam = self.importGundam()
+        stateReader = GundamRootStateReader(self.runtime.absoluteOutputRootPath)
+        stateConfigBuilder = stateReader.buildPostFitParameterStateConfig(gundam)
+        parametersManager = (
+            self.engine.getLikelihoodInterface()
+            .getModelPropagator()
+            .getParametersManager()
+        )
+        parametersManager.injectParameterValues(stateConfigBuilder.getConfig())
 
     def refreshParameters(self) -> list[GundamParameter]:
         self._requireConfigured()
