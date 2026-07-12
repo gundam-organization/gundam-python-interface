@@ -25,6 +25,14 @@ class GundamHistogram:
             dtype=np.float64,
         )
 
+    @property
+    def sqrtSumSqWeights(self) -> np.ndarray:
+        """Bin ``sqrtSumSqWeights`` values as a NumPy array."""
+        return np.array(
+            [float(binContent.sqrtSumSqWeights) for binContent in self.binContents],
+            dtype=np.float64,
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class GundamSample:

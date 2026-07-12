@@ -289,7 +289,8 @@ def test_initialize_loads_postfit_state_when_requested(tmp_path, monkeypatch) ->
         {
             "FitterEngine/postFit/Migrad/parameterStateAfterMinimize_TNamed": FakeTNamed(
                 '{"parameterSetList":[]}'
-            )
+            ),
+            "FitterEngine/preFit/data/sample0/histogram": FakeTH1D([10.0, 20.0], [1.0, 2.0]),
         },
     )
     fakeGundam = FakeGundamModule()
@@ -309,14 +310,24 @@ def test_initialize_loads_postfit_state_when_requested(tmp_path, monkeypatch) ->
     interface.initialize()
 
     assert interface.engine.initializeCount == 1
+    assert interface.dataSamples.sumWeights(0).tolist() == [10.0, 20.0]
     assert len(fakeParametersManager.injectedConfigs) == 1
     assert fakeParametersManager.injectedConfigs[0].startswith("config:")
 
 
-def test_initialize_does_not_load_postfit_state_by_default(tmp_path) -> None:
+def test_initialize_restores_data_histograms_from_output_root_by_default(
+    tmp_path,
+    monkeypatch,
+) -> None:
     outputRootPath = tmp_path / "fit.root"
     outputRootPath.write_text("root", encoding="utf-8")
     fakeParametersManager = FakeInjectingParametersManager()
+    installFakeUproot(
+        monkeypatch,
+        {
+            "FitterEngine/preFit/data/sample0/histogram": FakeTH1D([3.0, 4.0], [0.3, 0.4]),
+        },
+    )
     fakeGundam = FakeGundamModule()
     interface = gundam_interface.GundamInterface(
         runtime=gundam_interface.GundamRuntime(
@@ -333,12 +344,19 @@ def test_initialize_does_not_load_postfit_state_by_default(tmp_path) -> None:
     interface.initialize()
 
     assert fakeParametersManager.injectedConfigs == []
+    assert interface.dataSamples.sumWeights(0).tolist() == [3.0, 4.0]
+    assert interface.dataSamples[0].histogram.sqrtSumSqWeights.tolist() == [0.3, 0.4]
 
 
 def test_initialize_fails_when_requested_postfit_state_is_missing(tmp_path, monkeypatch) -> None:
     outputRootPath = tmp_path / "fit.root"
     outputRootPath.write_text("root", encoding="utf-8")
-    installFakeUproot(monkeypatch, {})
+    installFakeUproot(
+        monkeypatch,
+        {
+            "FitterEngine/preFit/data/sample0/histogram": FakeTH1D([1.0, 2.0], [0.1, 0.2]),
+        },
+    )
     fakeGundam = FakeGundamModule()
     interface = gundam_interface.GundamInterface(
         runtime=gundam_interface.GundamRuntime(
@@ -357,6 +375,35 @@ def test_initialize_fails_when_requested_postfit_state_is_missing(tmp_path, monk
         interface.initialize()
 
 
+def test_initialize_fails_when_saved_data_histogram_bin_count_mismatches(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    outputRootPath = tmp_path / "fit.root"
+    outputRootPath.write_text("root", encoding="utf-8")
+    installFakeUproot(
+        monkeypatch,
+        {
+            "FitterEngine/preFit/data/sample0/histogram": FakeTH1D([1.0], [0.1]),
+        },
+    )
+    fakeGundam = FakeGundamModule()
+    interface = gundam_interface.GundamInterface(
+        runtime=gundam_interface.GundamRuntime(
+            workDir=tmp_path,
+            loader=gundam_interface.GundamLoader(),
+            configPath="config.yaml",
+            outputRootPath=outputRootPath,
+        ),
+        gundam=fakeGundam,
+    )
+    interface.engine = FakeInitializableEngine(FakeInjectingParametersManager())
+    interface.refreshParameters = lambda: interface.parameters
+
+    with pytest.raises(ValueError, match="Mismatching bin number"):
+        interface.initialize()
+
+
 def test_gundam_runtime_loads_legacy_python_path_into_loader(tmp_path) -> None:
     runtime = gundam_interface.GundamRuntime.fromDict(
         {
@@ -370,14 +417,18 @@ def test_gundam_runtime_loads_legacy_python_path_into_loader(tmp_path) -> None:
 
 
 class FakeBinContent:
-    def __init__(self, sumWeights) -> None:
+    def __init__(self, sumWeights, sqrtSumSqWeights=0.0) -> None:
         self.sumWeights = sumWeights
+        self.sqrtSumSqWeights = sqrtSumSqWeights
 
 
 class FakeHistogram:
-    def __init__(self, sumWeights) -> None:
+    def __init__(self, sumWeights, sqrtSumSqWeights=None) -> None:
+        if sqrtSumSqWeights is None:
+            sqrtSumSqWeights = [0.0 for _ in sumWeights]
         self._binContentList = [
-            FakeBinContent(sumWeight) for sumWeight in sumWeights
+            FakeBinContent(sumWeight, sqrtSumSqWeight)
+            for sumWeight, sqrtSumSqWeight in zip(sumWeights, sqrtSumSqWeights)
         ]
 
     def getBinContentList(self):
@@ -385,8 +436,12 @@ class FakeHistogram:
 
 
 class FakeSample:
-    def __init__(self, sumWeights) -> None:
-        self._histogram = FakeHistogram(sumWeights)
+    def __init__(self, sumWeights, name="sample0", sqrtSumSqWeights=None) -> None:
+        self._name = name
+        self._histogram = FakeHistogram(sumWeights, sqrtSumSqWeights)
+
+    def getName(self):
+        return self._name
 
     def getHistogram(self):
         return self._histogram
@@ -447,6 +502,18 @@ class FakeTNamed:
         return self._title
 
 
+class FakeTH1D:
+    def __init__(self, values, errors) -> None:
+        self._values = values
+        self._errors = errors
+
+    def values(self, flow=False):
+        return self._values
+
+    def errors(self, flow=False):
+        return self._errors
+
+
 class FakeUprootFile:
     def __init__(self, objects) -> None:
         self._objects = objects
@@ -498,8 +565,9 @@ class FakeStatePropagator:
 
 
 class FakeStateLikelihoodInterface:
-    def __init__(self, parametersManager) -> None:
+    def __init__(self, parametersManager, dataSamples) -> None:
         self._modelPropagator = FakeStatePropagator(parametersManager)
+        self._dataPropagator = FakePropagator(dataSamples)
         self.dataType = None
 
     def setDataType(self, dataType) -> None:
@@ -508,10 +576,18 @@ class FakeStateLikelihoodInterface:
     def getModelPropagator(self):
         return self._modelPropagator
 
+    def getDataPropagator(self):
+        return self._dataPropagator
+
 
 class FakeInitializableEngine:
-    def __init__(self, parametersManager) -> None:
-        self._likelihoodInterface = FakeStateLikelihoodInterface(parametersManager)
+    def __init__(self, parametersManager, dataSamples=None) -> None:
+        if dataSamples is None:
+            dataSamples = [FakeSample([0.0, 0.0], name="sample0")]
+        self._likelihoodInterface = FakeStateLikelihoodInterface(
+            parametersManager,
+            dataSamples,
+        )
         self.initializeCount = 0
 
     def initialize(self) -> None:

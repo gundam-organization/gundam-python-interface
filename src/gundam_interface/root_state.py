@@ -7,6 +7,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
+
+@dataclass(frozen=True, slots=True)
+class RootHistogramState:
+    """Histogram bin state read from a GUNDAM ROOT output file."""
+
+    sumWeights: np.ndarray
+    sqrtSumSqWeights: np.ndarray
+
 
 @dataclass(frozen=True, slots=True)
 class GundamRootStateReader:
@@ -17,6 +27,7 @@ class GundamRootStateReader:
     POST_FIT_PARAMETER_STATE_PATH = (
         "FitterEngine/postFit/Migrad/parameterStateAfterMinimize_TNamed"
     )
+    DATA_HISTOGRAM_PATH_TEMPLATE = "FitterEngine/preFit/data/{sampleName}/histogram"
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "path", Path(self.path).expanduser())
@@ -31,6 +42,11 @@ class GundamRootStateReader:
             gundam,
             self.readPostFitParameterStateString(),
         )
+
+    def readDataHistogram(self, sampleName: str) -> RootHistogramState:
+        """Return the saved pre-fit data histogram for one sample."""
+        objectPath = self.DATA_HISTOGRAM_PATH_TEMPLATE.format(sampleName=sampleName)
+        return self._readHistogram(objectPath)
 
     def _readTNamedTitle(self, objectPath: str) -> str:
         import uproot
@@ -49,6 +65,33 @@ class GundamRootStateReader:
                     raise TypeError(
                         f"Object '{objectPath}' in {self.path} does not expose TNamed.fTitle"
                     ) from error
+        except OSError as error:
+            raise FileNotFoundError(
+                f"Could not open GUNDAM ROOT output file: {self.path}"
+            ) from error
+
+    def _readHistogram(self, objectPath: str) -> RootHistogramState:
+        import uproot
+
+        try:
+            with uproot.open(self.path) as rootFile:
+                try:
+                    histogram = rootFile[objectPath]
+                except KeyError as error:
+                    raise KeyError(
+                        f"Could not find '{objectPath}' in GUNDAM ROOT output file: {self.path}"
+                    ) from error
+                try:
+                    sumWeights = np.asarray(histogram.values(flow=False), dtype=np.float64)
+                    sqrtSumSqWeights = np.asarray(histogram.errors(flow=False), dtype=np.float64)
+                except AttributeError as error:
+                    raise TypeError(
+                        f"Object '{objectPath}' in {self.path} does not expose TH1 values"
+                    ) from error
+                return RootHistogramState(
+                    sumWeights=sumWeights,
+                    sqrtSumSqWeights=sqrtSumSqWeights,
+                )
         except OSError as error:
             raise FileNotFoundError(
                 f"Could not open GUNDAM ROOT output file: {self.path}"

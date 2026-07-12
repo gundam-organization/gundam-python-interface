@@ -192,9 +192,33 @@ class GundamInterface:
                 self._setLikelihoodDataType()
                 with redirectContext:
                     self.engine.initialize()
+                self._loadDataHistogramsIfAvailable()
                 self._loadPostFitStateIfRequested()
 
             self.refreshParameters()
+
+    def _loadDataHistogramsIfAvailable(self) -> None:
+        if self.runtime.outputRootPath is None:
+            return
+
+        stateReader = GundamRootStateReader(self.runtime.absoluteOutputRootPath)
+        for sample in self.dataSamples:
+            sampleName = str(sample.handle.getName())
+            histogramState = stateReader.readDataHistogram(sampleName)
+            binContents = sample.histogram.binContents
+            if len(binContents) != histogramState.sumWeights.shape[0]:
+                raise ValueError(
+                    f"Mismatching bin number for data sample '{sampleName}': "
+                    f"ROOT histogram has {histogramState.sumWeights.shape[0]} bins, "
+                    f"GUNDAM sample has {len(binContents)} bins"
+                )
+            for binContent, sumWeight, sqrtSumSqWeight in zip(
+                binContents,
+                histogramState.sumWeights,
+                histogramState.sqrtSumSqWeights,
+            ):
+                binContent.sumWeights = float(sumWeight)
+                binContent.sqrtSumSqWeights = float(sqrtSumSqWeight)
 
     def _loadPostFitStateIfRequested(self) -> None:
         if not self.runtime.loadPostFitState:

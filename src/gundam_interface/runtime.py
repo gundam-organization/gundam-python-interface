@@ -47,8 +47,9 @@ class GundamRuntime:
     outputRootPath:
         Path to a GUNDAM ROOT output file, relative to ``workDir`` or absolute.
         Used as the configuration source when neither ``configPath`` nor
-        ``configJsonString`` is set, and as the post-fit state source when
-        ``loadPostFitState`` is true.
+        ``configJsonString`` is set. When provided, saved pre-fit data
+        histograms are restored after initialization. It is also used as the
+        post-fit state source when ``loadPostFitState`` is true.
     loadPostFitState:
         Load and inject the post-fit parameter state from ``outputRootPath``
         after engine initialization. Defaults to ``False``.
