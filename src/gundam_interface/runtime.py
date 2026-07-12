@@ -47,9 +47,15 @@ class GundamRuntime:
     outputRootPath:
         Path to a GUNDAM ROOT output file, relative to ``workDir`` or absolute.
         Used as the configuration source when neither ``configPath`` nor
-        ``configJsonString`` is set. When provided, saved pre-fit data
-        histograms are restored after initialization. It is also used as the
+        ``configJsonString`` is set. It is also used as the pre-fit data
+        histogram source when ``loadDataHistograms`` is true, and as the
         post-fit state source when ``loadPostFitState`` is true.
+    loadDataHistograms:
+        Load saved pre-fit data histograms from ``outputRootPath`` after engine
+        initialization. Defaults to ``True`` so a ROOT state load preserves the
+        original data, including toys whose seed is not available. Set to
+        ``False`` to load only the stored config and let GUNDAM build data from
+        ``dataType`` and ``randomSeed``.
     loadPostFitState:
         Load and inject the post-fit parameter state from ``outputRootPath``
         after engine initialization. Defaults to ``False``.
@@ -70,6 +76,7 @@ class GundamRuntime:
     overrideList: list[str | Path] = field(default_factory=list)
     configJsonString: str | None = None
     outputRootPath: str | Path | None = None
+    loadDataHistograms: bool = True
     loadPostFitState: bool = False
     forceAsimov: bool | None = None
     dataType: str | None = None
@@ -90,6 +97,7 @@ class GundamRuntime:
         self.overrideList = [Path(path).expanduser() for path in self.overrideList]
         if self.configJsonString is not None:
             self.configJsonString = self.configJsonString.strip()
+        self.loadDataHistograms = bool(self.loadDataHistograms)
         self.loadPostFitState = bool(self.loadPostFitState)
 
         if self.nCpuThreads < 1:
@@ -110,7 +118,25 @@ class GundamRuntime:
             )
         if self.loadPostFitState and self.outputRootPath is None:
             raise ValueError("outputRootPath must be provided when loadPostFitState is True")
+        if (
+            self.outputRootPath is not None
+            and not self.loadDataHistograms
+            and self.dataType is None
+            and self.forceAsimov is None
+        ):
+            raise ValueError(
+                "dataType must be provided when loadDataHistograms is False"
+            )
         self.dataType = self._canonicalDataType(self.dataType, self.forceAsimov)
+        if (
+            self.outputRootPath is not None
+            and not self.loadDataHistograms
+            and self.dataType == "Toy"
+            and self.randomSeed is None
+        ):
+            raise ValueError(
+                "randomSeed must be provided for Toy data when loadDataHistograms is False"
+            )
 
     @classmethod
     def fromDict(cls, data: dict[str, Any]) -> "GundamRuntime":
@@ -127,6 +153,7 @@ class GundamRuntime:
             overrideList=list(data.get("overrideList", [])),
             configJsonString=data.get("configJsonString"),
             outputRootPath=data.get("outputRootPath"),
+            loadDataHistograms=bool(data.get("loadDataHistograms", True)),
             loadPostFitState=bool(data.get("loadPostFitState", False)),
             forceAsimov=data.get("forceAsimov", data.get("useAsimov")),
             dataType=data.get("dataType"),
@@ -169,6 +196,8 @@ class GundamRuntime:
             data["randomSeed"] = self.randomSeed
         if self.outputRootPath is not None:
             data["outputRootPath"] = str(self.outputRootPath)
+        if not self.loadDataHistograms:
+            data["loadDataHistograms"] = self.loadDataHistograms
         if self.loadPostFitState:
             data["loadPostFitState"] = self.loadPostFitState
         if self.configJsonString is not None:

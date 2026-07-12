@@ -198,7 +198,7 @@ class GundamInterface:
             self.refreshParameters()
 
     def _loadDataHistogramsIfAvailable(self) -> None:
-        if self.runtime.outputRootPath is None:
+        if self.runtime.outputRootPath is None or not self.runtime.loadDataHistograms:
             return
 
         stateReader = GundamRootStateReader(self.runtime.absoluteOutputRootPath)

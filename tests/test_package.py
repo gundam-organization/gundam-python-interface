@@ -62,7 +62,10 @@ def test_gundam_runtime_serializes_output_root_state(tmp_path) -> None:
         workDir=tmp_path,
         configPath="config.yaml",
         outputRootPath="fit.root",
+        loadDataHistograms=False,
         loadPostFitState=True,
+        dataType="Toy",
+        randomSeed=12345,
         loader=gundam_interface.GundamLoader(),
     )
 
@@ -71,9 +74,13 @@ def test_gundam_runtime_serializes_output_root_state(tmp_path) -> None:
 
     assert data["configPath"] == "config.yaml"
     assert data["outputRootPath"] == "fit.root"
+    assert data["loadDataHistograms"] is False
     assert data["loadPostFitState"] is True
+    assert data["dataType"] == "Toy"
+    assert data["randomSeed"] == 12345
     assert restored.configPath == runtime.configPath
     assert restored.outputRootPath == runtime.outputRootPath
+    assert restored.loadDataHistograms is False
     assert restored.loadPostFitState is True
 
 
@@ -103,6 +110,27 @@ def test_gundam_runtime_rejects_config_path_and_json_string(tmp_path) -> None:
             workDir=tmp_path,
             configPath="config.yaml",
             configJsonString="{}",
+            loader=gundam_interface.GundamLoader(),
+        )
+
+
+def test_gundam_runtime_rejects_config_only_root_without_data_type(tmp_path) -> None:
+    with pytest.raises(ValueError, match="dataType"):
+        gundam_interface.GundamRuntime(
+            workDir=tmp_path,
+            outputRootPath="fit.root",
+            loadDataHistograms=False,
+            loader=gundam_interface.GundamLoader(),
+        )
+
+
+def test_gundam_runtime_rejects_config_only_toy_root_without_seed(tmp_path) -> None:
+    with pytest.raises(ValueError, match="randomSeed"):
+        gundam_interface.GundamRuntime(
+            workDir=tmp_path,
+            outputRootPath="fit.root",
+            loadDataHistograms=False,
+            dataType="Toy",
             loader=gundam_interface.GundamLoader(),
         )
 
@@ -346,6 +374,32 @@ def test_initialize_restores_data_histograms_from_output_root_by_default(
     assert fakeParametersManager.injectedConfigs == []
     assert interface.dataSamples.sumWeights(0).tolist() == [3.0, 4.0]
     assert interface.dataSamples[0].histogram.sqrtSumSqWeights.tolist() == [0.3, 0.4]
+
+
+def test_initialize_can_skip_data_histograms_from_output_root(tmp_path) -> None:
+    outputRootPath = tmp_path / "fit.root"
+    outputRootPath.write_text("root", encoding="utf-8")
+    fakeParametersManager = FakeInjectingParametersManager()
+    fakeGundam = FakeGundamModule()
+    interface = gundam_interface.GundamInterface(
+        runtime=gundam_interface.GundamRuntime(
+            workDir=tmp_path,
+            loader=gundam_interface.GundamLoader(),
+            configPath="config.yaml",
+            outputRootPath=outputRootPath,
+            loadDataHistograms=False,
+            dataType="Toy",
+            randomSeed=12345,
+        ),
+        gundam=fakeGundam,
+    )
+    interface.engine = FakeInitializableEngine(fakeParametersManager)
+    interface.refreshParameters = lambda: interface.parameters
+
+    interface.initialize()
+
+    assert interface.dataSamples.sumWeights(0).tolist() == [0.0, 0.0]
+    assert fakeParametersManager.injectedConfigs == []
 
 
 def test_initialize_fails_when_requested_postfit_state_is_missing(tmp_path, monkeypatch) -> None:
