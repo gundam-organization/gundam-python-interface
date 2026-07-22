@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Iterator
+from typing import Any, Iterator, Sequence
 
 import numpy as np
 
@@ -12,10 +12,31 @@ class GundamHistogram:
 
     handle: Any
 
+    @staticmethod
+    def _chooseVariableOrder(
+        discoveredNames: Sequence[str], preferredOrder: Sequence[str] | None = None
+    ) -> list[str]:
+        discoveredNames = list(discoveredNames)
+        if preferredOrder is None:
+            return discoveredNames
+
+        ordered = [name for name in preferredOrder if name in discoveredNames]
+        ordered.extend(name for name in discoveredNames if name not in ordered)
+        if len(ordered) != len(discoveredNames):
+            raise ValueError(
+                f"Inconsistent axis order: {ordered} vs {discoveredNames}"
+            )
+        return ordered
+
     @property
     def binContents(self) -> list[Any]:
         """Raw GUNDAM bin-content handles."""
         return list(self.handle.getBinContentList())
+
+    @property
+    def binContexts(self) -> list[Any]:
+        """Raw GUNDAM bin-context handles."""
+        return list(self.handle.getBinContextList())
 
     @property
     def sumWeights(self) -> np.ndarray:
@@ -32,6 +53,136 @@ class GundamHistogram:
             [float(binContent.sqrtSumSqWeights) for binContent in self.binContents],
             dtype=np.float64,
         )
+
+    def variableNames(
+        self,
+        preferredOrder: Sequence[str] | None = None,
+        *,
+        includeConditionVars: bool = False,
+    ) -> list[str]:
+        """Variable names used by this histogram."""
+        discoveredNames = None
+        for binContext in self.binContexts:
+            edges = [
+                edge
+                for edge in binContext.bin.getEdgesList()
+                if includeConditionVars or not edge.isConditionVar
+            ]
+            currentNames = [edge.varName for edge in edges]
+            if discoveredNames is None:
+                discoveredNames = currentNames
+                continue
+            if set(currentNames) != set(discoveredNames):
+                raise ValueError(
+                    "Inconsistent variables across bins: "
+                    f"{currentNames} vs {discoveredNames}"
+                )
+
+        if discoveredNames is None:
+            return []
+
+        return self._chooseVariableOrder(discoveredNames, preferredOrder)
+
+    def binDefinitions(
+        self,
+        variableOrder: Sequence[str] | None = None,
+        *,
+        includeConditionVars: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Bin definitions indexed like the histogram contents."""
+        if variableOrder is None:
+            variableOrder = self.variableNames(
+                includeConditionVars=includeConditionVars
+            )
+        else:
+            variableOrder = list(variableOrder)
+
+        bins = []
+        nBinContents = len(self.binContents)
+        for binContext in self.binContexts:
+            binHandle = binContext.bin
+            edges = [
+                edge
+                for edge in binHandle.getEdgesList()
+                if includeConditionVars or not edge.isConditionVar
+            ]
+            edgeByName = {edge.varName: edge for edge in edges}
+            if set(edgeByName) != set(variableOrder):
+                raise ValueError(
+                    f"Inconsistent variables for bin {binHandle.getIndex()}: "
+                    f"{list(edgeByName)} vs {list(variableOrder)}"
+                )
+
+            binIndex = int(binHandle.getIndex())
+            if not 0 <= binIndex < nBinContents:
+                raise IndexError(
+                    f"Invalid bin index {binIndex} for {nBinContents} contents"
+                )
+
+            bins.append(
+                {
+                    "index": binIndex,
+                    "edges": {
+                        name: {
+                            "min": float(edgeByName[name].min),
+                            "max": float(edgeByName[name].max),
+                        }
+                        for name in variableOrder
+                    },
+                }
+            )
+
+        bins.sort(key=lambda item: item["index"])
+        return bins
+
+    def layout2d(
+        self, preferredOrder: Sequence[str] | None = None
+    ) -> dict[str, Any]:
+        """2D bin layout and contents for runtime-defined histogram plotting."""
+        variableNames = self.variableNames(preferredOrder=preferredOrder)
+        if len(variableNames) != 2:
+            raise ValueError(
+                f"Expected a 2D histogram, got {len(variableNames)} dimensions"
+            )
+
+        binDefinitions = self.binDefinitions(variableOrder=variableNames)
+        sumWeights = np.array(self.sumWeights, copy=True)
+
+        xName, yName = variableNames
+        return {
+            "variable_names": variableNames,
+            "bins": [
+                {
+                    "index": binDefinition["index"],
+                    "x_min": binDefinition["edges"][xName]["min"],
+                    "x_max": binDefinition["edges"][xName]["max"],
+                    "y_min": binDefinition["edges"][yName]["min"],
+                    "y_max": binDefinition["edges"][yName]["max"],
+                }
+                for binDefinition in binDefinitions
+            ],
+            "sum_weights": sumWeights,
+            "x_edges": np.unique(
+                [
+                    edge
+                    for binDefinition in binDefinitions
+                    for edge in (
+                        binDefinition["edges"][xName]["min"],
+                        binDefinition["edges"][xName]["max"],
+                    )
+                ]
+            ),
+            "y_edges": np.unique(
+                [
+                    edge
+                    for binDefinition in binDefinitions
+                    for edge in (
+                        binDefinition["edges"][yName]["min"],
+                        binDefinition["edges"][yName]["max"],
+                    )
+                ]
+            ),
+        }
 
 
 @dataclass(frozen=True, slots=True)

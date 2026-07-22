@@ -232,6 +232,82 @@ def test_gundam_samples_exposes_histogram_sum_weights() -> None:
     ]
 
 
+def test_gundam_histogram_exposes_2d_layout_helpers() -> None:
+    histogram = gundam_interface.GundamHistogram(
+        handle=FakeHistogram(
+            [10.0, 20.0],
+            binContexts=[
+                FakeBinContext(
+                    FakeBin(
+                        0,
+                        [
+                            FakeBinEdge("CosThetamu", -1.0, 0.0),
+                            FakeBinEdge("Pmu", 0.0, 320.0),
+                            FakeBinEdge("SelectedSample", 131, 131, True),
+                        ],
+                    )
+                ),
+                FakeBinContext(
+                    FakeBin(
+                        1,
+                        [
+                            FakeBinEdge("CosThetamu", 0.0, 1.0),
+                            FakeBinEdge("Pmu", 0.0, 320.0),
+                            FakeBinEdge("SelectedSample", 131, 131, True),
+                        ],
+                    )
+                ),
+            ],
+        )
+    )
+
+    assert histogram.variableNames() == ["CosThetamu", "Pmu"]
+    assert histogram.variableNames(preferredOrder=("Pmu", "CosThetamu")) == [
+        "Pmu",
+        "CosThetamu",
+    ]
+
+    binDefinitions = histogram.binDefinitions(variableOrder=("Pmu", "CosThetamu"))
+    assert binDefinitions == [
+        {
+            "index": 0,
+            "edges": {
+                "Pmu": {"min": 0.0, "max": 320.0},
+                "CosThetamu": {"min": -1.0, "max": 0.0},
+            },
+        },
+        {
+            "index": 1,
+            "edges": {
+                "Pmu": {"min": 0.0, "max": 320.0},
+                "CosThetamu": {"min": 0.0, "max": 1.0},
+            },
+        },
+    ]
+
+    layout = histogram.layout2d(preferredOrder=("Pmu", "CosThetamu"))
+    assert layout["variable_names"] == ["Pmu", "CosThetamu"]
+    assert layout["sum_weights"].tolist() == [10.0, 20.0]
+    assert layout["x_edges"].tolist() == [0.0, 320.0]
+    assert layout["y_edges"].tolist() == [-1.0, 0.0, 1.0]
+    assert layout["bins"] == [
+        {
+            "index": 0,
+            "x_min": 0.0,
+            "x_max": 320.0,
+            "y_min": -1.0,
+            "y_max": 0.0,
+        },
+        {
+            "index": 1,
+            "x_min": 0.0,
+            "x_max": 320.0,
+            "y_min": 0.0,
+            "y_max": 1.0,
+        },
+    ]
+
+
 def test_gundam_interface_exposes_model_and_data_samples(tmp_path) -> None:
     modelPropagator = FakePropagator([FakeSample([1.0])])
     dataPropagator = FakePropagator([FakeSample([2.0])])
@@ -476,23 +552,54 @@ class FakeBinContent:
         self.sqrtSumSqWeights = sqrtSumSqWeights
 
 
+class FakeBinEdge:
+    def __init__(self, varName, minValue, maxValue, isConditionVar=False) -> None:
+        self.varName = varName
+        self.min = minValue
+        self.max = maxValue
+        self.isConditionVar = isConditionVar
+
+
+class FakeBin:
+    def __init__(self, index, edges) -> None:
+        self._index = index
+        self._edges = edges
+
+    def getIndex(self):
+        return self._index
+
+    def getEdgesList(self):
+        return self._edges
+
+
+class FakeBinContext:
+    def __init__(self, binHandle) -> None:
+        self.bin = binHandle
+
+
 class FakeHistogram:
-    def __init__(self, sumWeights, sqrtSumSqWeights=None) -> None:
+    def __init__(self, sumWeights, sqrtSumSqWeights=None, binContexts=None) -> None:
         if sqrtSumSqWeights is None:
             sqrtSumSqWeights = [0.0 for _ in sumWeights]
         self._binContentList = [
             FakeBinContent(sumWeight, sqrtSumSqWeight)
             for sumWeight, sqrtSumSqWeight in zip(sumWeights, sqrtSumSqWeights)
         ]
+        self._binContextList = [] if binContexts is None else list(binContexts)
 
     def getBinContentList(self):
         return self._binContentList
 
+    def getBinContextList(self):
+        return self._binContextList
+
 
 class FakeSample:
-    def __init__(self, sumWeights, name="sample0", sqrtSumSqWeights=None) -> None:
+    def __init__(
+        self, sumWeights, name="sample0", sqrtSumSqWeights=None, binContexts=None
+    ) -> None:
         self._name = name
-        self._histogram = FakeHistogram(sumWeights, sqrtSumSqWeights)
+        self._histogram = FakeHistogram(sumWeights, sqrtSumSqWeights, binContexts)
 
     def getName(self):
         return self._name
