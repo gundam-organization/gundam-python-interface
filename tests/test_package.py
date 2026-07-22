@@ -288,6 +288,9 @@ def test_gundam_histogram_exposes_2d_layout_helpers() -> None:
     layout = histogram.layout2d(preferredOrder=("Pmu", "CosThetamu"))
     assert layout["variable_names"] == ["Pmu", "CosThetamu"]
     assert layout["sum_weights"].tolist() == [10.0, 20.0]
+    assert layout["bin_volumes"].tolist() == [320.0, 320.0]
+    assert layout["values"].tolist() == [10.0, 20.0]
+    assert layout["values_label"] == "sumWeights"
     assert layout["x_edges"].tolist() == [0.0, 320.0]
     assert layout["y_edges"].tolist() == [-1.0, 0.0, 1.0]
     assert layout["bins"] == [
@@ -297,6 +300,8 @@ def test_gundam_histogram_exposes_2d_layout_helpers() -> None:
             "x_max": 320.0,
             "y_min": -1.0,
             "y_max": 0.0,
+            "measure": 320.0,
+            "sum_weights": 10.0,
         },
         {
             "index": 1,
@@ -304,6 +309,101 @@ def test_gundam_histogram_exposes_2d_layout_helpers() -> None:
             "x_max": 320.0,
             "y_min": 0.0,
             "y_max": 1.0,
+            "measure": 320.0,
+            "sum_weights": 20.0,
+        },
+    ]
+
+    densityLayout = histogram.layout2d(
+        preferredOrder=("Pmu", "CosThetamu"),
+        divideByBinVolume=True,
+    )
+    assert densityLayout["values_label"] == "sumWeights / binMeasure"
+    assert densityLayout["values"].tolist() == [0.03125, 0.0625]
+
+
+def test_gundam_histogram_projects_3d_layout_to_2d() -> None:
+    histogram = gundam_interface.GundamHistogram(
+        handle=FakeHistogram(
+            [10.0, 20.0, 30.0, 40.0],
+            binContexts=[
+                FakeBinContext(
+                    FakeBin(
+                        0,
+                        [
+                            FakeBinEdge("CosThetamu", -1.0, 0.0),
+                            FakeBinEdge("Pmu", 0.0, 320.0),
+                            FakeBinEdge("Enu", 0.0, 1.0),
+                        ],
+                    )
+                ),
+                FakeBinContext(
+                    FakeBin(
+                        1,
+                        [
+                            FakeBinEdge("CosThetamu", -1.0, 0.0),
+                            FakeBinEdge("Pmu", 0.0, 320.0),
+                            FakeBinEdge("Enu", 1.0, 2.0),
+                        ],
+                    )
+                ),
+                FakeBinContext(
+                    FakeBin(
+                        2,
+                        [
+                            FakeBinEdge("CosThetamu", 0.0, 1.0),
+                            FakeBinEdge("Pmu", 0.0, 320.0),
+                            FakeBinEdge("Enu", 0.0, 1.0),
+                        ],
+                    )
+                ),
+                FakeBinContext(
+                    FakeBin(
+                        3,
+                        [
+                            FakeBinEdge("CosThetamu", 0.0, 1.0),
+                            FakeBinEdge("Pmu", 0.0, 320.0),
+                            FakeBinEdge("Enu", 1.0, 2.0),
+                        ],
+                    )
+                ),
+            ],
+        )
+    )
+
+    assert histogram.binMeasures(variableOrder=("Pmu", "CosThetamu")).tolist() == [
+        320.0,
+        320.0,
+        320.0,
+        320.0,
+    ]
+
+    layout = histogram.layout2d(
+        preferredOrder=("Pmu", "CosThetamu"),
+        divideByBinVolume=True,
+    )
+    assert layout["variable_names"] == ["Pmu", "CosThetamu"]
+    assert layout["sum_weights"].tolist() == [30.0, 70.0]
+    assert layout["bin_volumes"].tolist() == [320.0, 320.0]
+    assert layout["values"].tolist() == [0.09375, 0.21875]
+    assert layout["bins"] == [
+        {
+            "index": 0,
+            "x_min": 0.0,
+            "x_max": 320.0,
+            "y_min": -1.0,
+            "y_max": 0.0,
+            "measure": 320.0,
+            "sum_weights": 30.0,
+        },
+        {
+            "index": 1,
+            "x_min": 0.0,
+            "x_max": 320.0,
+            "y_min": 0.0,
+            "y_max": 1.0,
+            "measure": 320.0,
+            "sum_weights": 70.0,
         },
     ]
 

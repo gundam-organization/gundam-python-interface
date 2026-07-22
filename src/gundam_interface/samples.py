@@ -54,6 +54,20 @@ class GundamHistogram:
             dtype=np.float64,
         )
 
+    @property
+    def binVolumes(self) -> np.ndarray:
+        """Full-dimensional bin volumes as a NumPy array."""
+        return self.binMeasures()
+
+    def densitySumWeights(self) -> np.ndarray:
+        """Bin ``sumWeights`` values divided by the full-dimensional bin volume."""
+        return np.divide(
+            self.sumWeights,
+            self.binVolumes,
+            out=np.full_like(self.sumWeights, np.nan),
+            where=self.binVolumes != 0,
+        )
+
     def variableNames(
         self,
         preferredOrder: Sequence[str] | None = None,
@@ -107,10 +121,11 @@ class GundamHistogram:
                 if includeConditionVars or not edge.isConditionVar
             ]
             edgeByName = {edge.varName: edge for edge in edges}
-            if set(edgeByName) != set(variableOrder):
+            missingNames = [name for name in variableOrder if name not in edgeByName]
+            if missingNames:
                 raise ValueError(
                     f"Inconsistent variables for bin {binHandle.getIndex()}: "
-                    f"{list(edgeByName)} vs {list(variableOrder)}"
+                    f"missing {missingNames} in {list(edgeByName)}"
                 )
 
             binIndex = int(binHandle.getIndex())
@@ -135,50 +150,137 @@ class GundamHistogram:
         bins.sort(key=lambda item: item["index"])
         return bins
 
+    def binMeasures(
+        self,
+        variableOrder: Sequence[str] | None = None,
+        *,
+        includeConditionVars: bool = False,
+    ) -> np.ndarray:
+        """Per-bin measure computed from the selected variables only."""
+        if variableOrder is None:
+            variableOrder = self.variableNames(
+                includeConditionVars=includeConditionVars
+            )
+        else:
+            variableOrder = list(variableOrder)
+
+        binDefinitions = self.binDefinitions(
+            variableOrder=variableOrder,
+            includeConditionVars=includeConditionVars,
+        )
+        measures = np.full(len(binDefinitions), np.nan, dtype=np.float64)
+        for binDefinition in binDefinitions:
+            measure = 1.0
+            for edges in binDefinition["edges"].values():
+                measure *= float(edges["max"]) - float(edges["min"])
+            measures[binDefinition["index"]] = measure
+        return measures
+
+    def projectedDensitySumWeights(
+        self,
+        variableOrder: Sequence[str] | None = None,
+    ) -> np.ndarray:
+        """Bin ``sumWeights`` values divided by the selected-variable measure."""
+        measures = self.binMeasures(variableOrder=variableOrder)
+        return np.divide(
+            self.sumWeights,
+            measures,
+            out=np.full_like(self.sumWeights, np.nan),
+            where=measures != 0,
+        )
+
     def layout2d(
-        self, preferredOrder: Sequence[str] | None = None
+        self,
+        preferredOrder: Sequence[str] | None = None,
+        *,
+        divideByBinVolume: bool = False,
     ) -> dict[str, Any]:
         """2D bin layout and contents for runtime-defined histogram plotting."""
-        variableNames = self.variableNames(preferredOrder=preferredOrder)
+        allVariableNames = self.variableNames()
+        variableNames = self._chooseVariableOrder(allVariableNames, preferredOrder)[:2]
         if len(variableNames) != 2:
             raise ValueError(
-                f"Expected a 2D histogram, got {len(variableNames)} dimensions"
+                f"Expected at least 2 dimensions, got {len(allVariableNames)}"
             )
 
-        binDefinitions = self.binDefinitions(variableOrder=variableNames)
-        sumWeights = np.array(self.sumWeights, copy=True)
-
         xName, yName = variableNames
+        binDefinitions = self.binDefinitions(variableOrder=allVariableNames)
+        projectedBins = {}
+        for binDefinition, sumWeight in zip(binDefinitions, self.sumWeights):
+            xEdges = binDefinition["edges"][xName]
+            yEdges = binDefinition["edges"][yName]
+            key = (
+                float(xEdges["min"]),
+                float(xEdges["max"]),
+                float(yEdges["min"]),
+                float(yEdges["max"]),
+            )
+            if key not in projectedBins:
+                projectedBins[key] = {
+                    "x_min": key[0],
+                    "x_max": key[1],
+                    "y_min": key[2],
+                    "y_max": key[3],
+                    "measure": (key[1] - key[0]) * (key[3] - key[2]),
+                    "sum_weights": 0.0,
+                }
+            projectedBins[key]["sum_weights"] += float(sumWeight)
+
+        bins = []
+        for index, key in enumerate(sorted(projectedBins)):
+            projectedBin = projectedBins[key]
+            bins.append(
+                {
+                    "index": index,
+                    "x_min": projectedBin["x_min"],
+                    "x_max": projectedBin["x_max"],
+                    "y_min": projectedBin["y_min"],
+                    "y_max": projectedBin["y_max"],
+                    "measure": projectedBin["measure"],
+                    "sum_weights": projectedBin["sum_weights"],
+                }
+            )
+
+        sumWeights = np.array(
+            [binDefinition["sum_weights"] for binDefinition in bins], dtype=np.float64
+        )
+        binMeasures = np.array(
+            [binDefinition["measure"] for binDefinition in bins], dtype=np.float64
+        )
+        values = np.divide(
+            sumWeights,
+            binMeasures,
+            out=np.full_like(sumWeights, np.nan),
+            where=binMeasures != 0,
+        ) if divideByBinVolume else np.array(sumWeights, copy=True)
+
         return {
             "variable_names": variableNames,
-            "bins": [
-                {
-                    "index": binDefinition["index"],
-                    "x_min": binDefinition["edges"][xName]["min"],
-                    "x_max": binDefinition["edges"][xName]["max"],
-                    "y_min": binDefinition["edges"][yName]["min"],
-                    "y_max": binDefinition["edges"][yName]["max"],
-                }
-                for binDefinition in binDefinitions
-            ],
+            "bins": bins,
             "sum_weights": sumWeights,
+            "bin_measures": binMeasures,
+            "bin_volumes": binMeasures,
+            "values": np.array(values, copy=True),
+            "values_label": "sumWeights / binMeasure"
+            if divideByBinVolume
+            else "sumWeights",
             "x_edges": np.unique(
                 [
                     edge
-                    for binDefinition in binDefinitions
+                    for binDefinition in bins
                     for edge in (
-                        binDefinition["edges"][xName]["min"],
-                        binDefinition["edges"][xName]["max"],
+                        binDefinition["x_min"],
+                        binDefinition["x_max"],
                     )
                 ]
             ),
             "y_edges": np.unique(
                 [
                     edge
-                    for binDefinition in binDefinitions
+                    for binDefinition in bins
                     for edge in (
-                        binDefinition["edges"][yName]["min"],
-                        binDefinition["edges"][yName]["max"],
+                        binDefinition["y_min"],
+                        binDefinition["y_max"],
                     )
                 ]
             ),
