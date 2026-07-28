@@ -161,7 +161,7 @@ class GundamInterface:
                         unit="throw",
                     )
                 for throwIndex in throwIterator:
-                    self.minimizer.throwPostfitParameters()
+                    self.getMinimizer().throwPostfitParameters()
                     physicalValues[throwIndex] = parametersManager.getParameterValues()
                     likelihoodInterface.propagateAndEvalLikelihood()
                     llh[throwIndex] = float(likelihoodInterface.getLastLikelihood())
