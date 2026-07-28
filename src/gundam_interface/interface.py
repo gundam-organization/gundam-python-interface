@@ -173,11 +173,6 @@ class GundamInterface:
                 llh=llh,
             )
 
-    def setSeed(self, seed: int | None = None) -> None:
-        self._requireConfigured()
-        seed = self._runtime.randomSeed if seed is None else seed
-        self._setEngineRandomSeed(self.engine, seed)
-
     def _loadDataHistogramsIfAvailable(self) -> None:
         if self._runtime.outputRootPath is None or not self._runtime.loadDataHistograms:
             return
@@ -210,15 +205,6 @@ class GundamInterface:
         stateConfigBuilder = stateReader.buildPostFitParameterStateConfig(gundam)
         self._requireConfigured()
         self._parametersManager.injectParametersState(stateConfigBuilder.toString())
-
-    @staticmethod
-    def _setEngineRandomSeed(engine, seed: int | None) -> None:
-        if seed is None:
-            return
-        seed = int(seed)
-        if seed < 0:
-            raise ValueError("seed must be >= 0")
-        type(engine).setRandomSeed(seed)
 
     def _setLikelihoodDataType(self) -> None:
         self._requireConfigured()

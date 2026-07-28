@@ -243,6 +243,11 @@ class GundamRuntime:
             gundam.setLightOutputMode(False)
             gundam.setNumberOfThreads(self.nCpuThreads)
             gundam.setRuntimeWorkingDirectory(str(self.absoluteWorkDir))
+
+            if self.randomSeed is not None:
+                print(self.randomSeed)
+                gundam.FitterEngine().setRandomSeed(int(self.randomSeed))
+
             self._gundamModule = gundam
         return self._gundamModule
 
