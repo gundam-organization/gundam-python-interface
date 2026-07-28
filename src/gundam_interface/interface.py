@@ -9,10 +9,7 @@ from typing import Any, Iterator
 
 import numpy as np
 
-from .parameters import (
-    GundamParameter,
-    wrapParameterSetList,
-)
+from .parameters import GundamParameter
 from .root_state import GundamRootStateReader
 from .runtime import GundamRuntime
 from .samples import GundamSamples

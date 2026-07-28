@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import importlib
+import json
 from dataclasses import dataclass
 from typing import Any
 
@@ -64,5 +66,23 @@ class GundamParameterSet:
         return GundamCovarianceMatrix(self._handle.getPriorCovarianceMatrix())
 
 
-def wrapParameterSetList(parameterSets: Any) -> list[GundamParameterSet]:
-    return [GundamParameterSet(_handle=parameterSet) for parameterSet in parameterSets]
+@dataclass(slots=True)
+class GundamParametersManager:
+    """Light Python-side view over a GUNDAM ParametersManager handle."""
+
+    _handle: Any
+
+    def throwParameters(self) -> None:
+        self._handle.throwParameters()
+
+    def exportParametersStateJson(self) -> Any:
+        return json.loads(self._handle.exportParameterInjectorConfig().toString())
+
+    def injectParameterValues(self, config: Any) -> None:
+        self._handle.injectParameterValues(config)
+
+    def getParameterSetList(self) -> list[GundamParameterSet]:
+        return [
+            GundamParameterSet(_handle=parameterSet)
+            for parameterSet in self._handle.getParameterSetsList()
+        ]

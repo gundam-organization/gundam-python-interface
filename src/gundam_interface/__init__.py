@@ -11,6 +11,8 @@ from .logging import (
 )
 from .parameters import (
     GundamParameter,
+    GundamParameterSet,
+    GundamParametersManager,
 )
 from .runtime import GundamRuntime
 from .samples import GundamHistogram, GundamSample, GundamSamples
@@ -23,6 +25,8 @@ __all__ = [
     "GundamCovarianceMatrix",
     "GundamLoader",
     "GundamParameter",
+    "GundamParameterSet",
+    "GundamParametersManager",
     "GundamRuntime",
     "GundamSample",
     "GundamSamples",
