@@ -45,9 +45,8 @@ def temporaryWorkingDirectory(path: str | os.PathLike[str]) -> Iterator[None]:
 class GundamInterface:
     """Thin Python wrapper around the GUNDAM fitting interface."""
 
-    def __init__(self, runtime: GundamRuntime, gundam: Any | None = None):
+    def __init__(self, runtime: GundamRuntime):
         self.runtime = runtime
-        self.gundam: Any | None = gundam
         self.configBuilder: Any | None = None
         self.configJsonString: str | None = None
         self.fitterEngineConfig: Any | None = None
@@ -112,9 +111,7 @@ class GundamInterface:
         return self.engine.getMinimizer().getMinimizerFitParameterPtr()
 
     def importGundam(self):
-        if self.gundam is None:
-            self.gundam = self.runtime.loader.importGundam()
-        return self.gundam
+        return self.runtime.loader.importGundam()
 
     def configure(self, validatePaths: bool = True) -> None:
         with preservedWorkingDirectory():
