@@ -507,7 +507,7 @@ def test_initialize_loads_postfit_state_when_requested(tmp_path, monkeypatch) ->
     assert interface.engine.initializeCount == 1
     assert interface.dataSamples.sumWeights(0).tolist() == [10.0, 20.0]
     assert len(fakeParametersManager.injectedConfigs) == 1
-    assert fakeParametersManager.injectedConfigs[0].startswith("config:")
+    assert fakeParametersManager.injectedConfigs[0].startswith("config-string:")
 
 
 def test_initialize_restores_data_histograms_from_output_root_by_default(
