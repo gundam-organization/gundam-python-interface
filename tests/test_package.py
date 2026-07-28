@@ -1,14 +1,14 @@
+import sys
+from contextlib import contextmanager
 from importlib.metadata import version
 from inspect import signature
-from contextlib import contextmanager
-import sys
 
 import pytest
 
 import gundam_interface
 from gundam_interface.internal.logging import GundamLogRedirector
-from gundam_interface.internal.parameters import GundamParametersManager
 from gundam_interface.internal.minimizer import GundamMinimizer
+from gundam_interface.internal.parameters import GundamParametersManager
 from gundam_interface.internal.samples import GundamHistogram, GundamSamples
 
 

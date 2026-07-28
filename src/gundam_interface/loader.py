@@ -77,7 +77,7 @@ class GundamLoader:
         return data
 
     @classmethod
-    def fromDict(cls, data: dict[str, str] | None) -> "GundamLoader":
+    def fromDict(cls, data: dict[str, str] | None) -> GundamLoader:
         """Create a loader from serialized metadata.
 
         ``gundamLibPath`` is the preferred key. Legacy metadata using

@@ -1,5 +1,5 @@
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import numpy as np
 
@@ -24,7 +24,7 @@ if srcPath.exists() and str(srcPath) not in sys.path:
     sys.path.insert(0, str(srcPath))
 # ~ end of this block
 
-from gundam_interface import GundamInterface, GundamLoader, GundamRuntime  # noqa: E402
+from gundam_interface import GundamInterface, GundamLoader, GundamRuntime
 
 np.random.seed(seed)
 

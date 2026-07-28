@@ -6,8 +6,8 @@ from .loader import GundamLoader
 from .runtime import GundamRuntime
 
 __all__ = [
-    "__version__",
     "GundamInterface",
     "GundamLoader",
     "GundamRuntime",
+    "__version__",
 ]

@@ -6,10 +6,10 @@ import sys
 import tempfile
 import threading
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator
 
 
 def isNotebookRuntime() -> bool:
