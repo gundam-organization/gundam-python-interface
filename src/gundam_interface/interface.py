@@ -234,6 +234,10 @@ class GundamInterface:
         )
         parametersManager.injectParameterValues(stateConfigBuilder.getConfig())
 
+    def getParameterSetList(self):
+        self._requireConfigured()
+        return self.engine.getLikelihoodInterface().getModelPropagator().getParametersManager().getParameterSetList()
+
     def refreshParameters(self) -> list[GundamParameter]:
         self._requireConfigured()
         parametersManager = (

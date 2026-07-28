@@ -11,7 +11,6 @@ class GundamParameter:
     """Small Python-side descriptor for an enabled GUNDAM parameter."""
 
     index: int
-    parameterSetIndex: int
     parameterIndex: int
     name: str
     prior: float
@@ -30,8 +29,71 @@ class GundamParameter:
         self.setValue(self.prior)
 
 
+@dataclass(slots=True)
+class GundamParameterSet:
+    """Light Python-side view over a GUNDAM ParameterSet handle."""
+
+    _handle: Any
+
+    @property
+    def isEnableEigenDecomp(self) -> bool:
+        return bool(self._handle.isEnableEigenDecomp())
+
+    @property
+    def parameters(self) -> list[GundamParameter]:
+        parameters: list[GundamParameter] = []
+        for parameterIndex, parameter in enumerate(self._handle.getParameterList()):
+            parameters.append(
+                GundamParameter(
+                    index=parameterIndex,
+                    parameterIndex=parameterIndex,
+                    name=parameter.getFullTitle(),
+                    prior=float(parameter.getPriorValue()),
+                    stepSize=float(parameter.getStepSize()),
+                    throwValue=None,
+                    handle=parameter,
+                )
+            )
+        return parameters
+
+    @property
+    def eigenParameters(self) -> list[GundamParameter]:
+        parameters: list[GundamParameter] = []
+        for parameterIndex, parameter in enumerate(self._handle.getEigenParameterList()):
+            parameters.append(
+                GundamParameter(
+                    index=parameterIndex,
+                    parameterIndex=parameterIndex,
+                    name=parameter.getFullTitle(),
+                    prior=float(parameter.getPriorValue()),
+                    stepSize=float(parameter.getStepSize()),
+                    throwValue=None,
+                    handle=parameter,
+                )
+            )
+        return parameters
+
+    @property
+    def priorCovarianceMatrix(self) -> Any:
+        return self._handle.getPriorCovarianceMatrix()
+
+    @property
+    def priorFullCovarianceMatrix(self) -> Any:
+        return self._handle.getPriorFullCovarianceMatrix()
+
+    def propagateOriginalToEigen(self) -> None:
+        self._handle.propagateOriginalToEigen()
+
+    def propagateEigenToOriginal(self) -> None:
+        self._handle.propagateEigenToOriginal()
+
+
 def getParameterThrowValue(parameter: Any) -> float:
     return float(parameter.getThrowValue())
+
+
+def wrapParameterSetList(parameterSets: Any) -> list[GundamParameterSet]:
+    return [GundamParameterSet(_handle=parameterSet) for parameterSet in parameterSets]
 
 
 def collectActiveParameters(
@@ -40,7 +102,7 @@ def collectActiveParameters(
     includeThrowValues: bool = False,
 ) -> list[GundamParameter]:
     parameters: list[GundamParameter] = []
-    for parameterSetIndex, parameterSet in enumerate(parametersManager.getParameterSetsList()):
+    for parameterSet in parametersManager.getParameterSetsList():
         for parameterIndex, parameter in enumerate(parameterSet.getParameterList()):
             if not parameter.isEnabled():
                 continue
@@ -54,7 +116,6 @@ def collectActiveParameters(
             parameters.append(
                 GundamParameter(
                     index=len(parameters),
-                    parameterSetIndex=parameterSetIndex,
                     parameterIndex=parameterIndex,
                     name=parameter.getFullTitle(),
                     prior=float(parameter.getPriorValue()),
