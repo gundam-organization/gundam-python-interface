@@ -46,52 +46,14 @@ class GundamInterface:
     """Thin Python wrapper around the GUNDAM fitting interface."""
 
     def __init__(self, runtime: GundamRuntime):
-        self.runtime = runtime
-        self.configBuilder: Any | None = None
-        self.configJsonString: str | None = None
-        self.fitterEngineConfig: Any | None = None
+        self._runtime = runtime
         self.engine: Any | None = None
-        self.parametersManager: GundamParametersManager | None = None
+        self._parametersManager: GundamParametersManager | None = None
+        self._isConfigured = False
         self._isInitialized = False
 
-    @property
-    def isConfigured(self) -> bool:
-        return self.engine is not None
-
-    @property
-    def isInitialized(self) -> bool:
-        return self._isInitialized
-
-    @property
-    def priors(self) -> np.ndarray:
-        self._requireInitialized()
-        return np.array(
-            [parameter.getPrior() for parameter in self.parametersManager.getActiveParameterList()],
-            dtype=np.float64,
-        )
-
-    @property
-    def stepSizes(self) -> np.ndarray:
-        self._requireInitialized()
-        return np.array(
-            [parameter.getStepSize() for parameter in self.parametersManager.getActiveParameterList()],
-            dtype=np.float64,
-        )
-
-    @property
-    def throwValues(self) -> np.ndarray | None:
-        self._requireInitialized()
-        if self.runtime.dataType != "Toy":
-            return None
-        return np.array(
-            [parameter.getThrow() for parameter in self.parametersManager.getActiveParameterList()],
-            dtype=np.float64,
-        )
-
-    @property
-    def parameterNames(self) -> list[str]:
-        self._requireInitialized()
-        return [parameter.getName() for parameter in self.parametersManager.getActiveParameterList()]
+    def getRuntime(self) -> GundamRuntime:
+        return self._runtime
 
     @property
     def modelSamples(self) -> GundamSamples:
@@ -110,18 +72,15 @@ class GundamInterface:
         self._requireConfigured()
         return self.engine.getMinimizer().getMinimizerFitParameterPtr()
 
-    def importGundam(self):
-        return self.runtime.loader.importGundam()
-
     def configure(self, validatePaths: bool = True) -> None:
         with preservedWorkingDirectory():
             if validatePaths:
-                self.runtime.validatePaths()
+                self._runtime.validatePaths()
 
-            gundam = self.importGundam()
+            gundam = self._runtime.loader.importGundam()
             gundam.setLightOutputMode(False)
-            gundam.setNumberOfThreads(self.runtime.nCpuThreads)
-            workingDirectory = Path(self.runtime.workDir).expanduser().resolve()
+            gundam.setNumberOfThreads(self._runtime.nCpuThreads)
+            workingDirectory = Path(self._runtime.workDir).expanduser().resolve()
             gundam.setRuntimeWorkingDirectory(str(workingDirectory))
 
             with temporaryWorkingDirectory(workingDirectory):
@@ -136,17 +95,15 @@ class GundamInterface:
 
             engine = gundam.FitterEngine()
             engine.setConfig(fitterEngineConfig)
-            self._setEngineRandomSeed(engine, self.runtime.randomSeed)
+            self._setEngineRandomSeed(engine, self._runtime.randomSeed)
             with temporaryWorkingDirectory(workingDirectory):
                 engine.configure()
 
-            self.configBuilder = configBuilder
-            self.configJsonString = configJsonString
-            self.fitterEngineConfig = fitterEngineConfig
             self.engine = engine
-            self.parametersManager = GundamParametersManager(
+            self._parametersManager = GundamParametersManager(
                 _handle=engine.getLikelihoodInterface().getModelPropagator().getParametersManager()
             )
+            self._isConfigured = True
             self._isInitialized = False
 
     def initialize(
@@ -155,11 +112,11 @@ class GundamInterface:
     ) -> None:
         with preservedWorkingDirectory():
             self._requireConfigured()
-            workingDirectory = Path(self.runtime.workDir).expanduser().resolve()
+            workingDirectory = Path(self._runtime.workDir).expanduser().resolve()
 
             if logPath is not None:
                 logPath = Path(logPath).expanduser().resolve()
-            redirectContext = self.runtime.logRedirector.redirect(
+            redirectContext = self._runtime.logRedirector.redirect(
                 logPath,
                 prefix="gundam_initialize",
             )
@@ -174,7 +131,7 @@ class GundamInterface:
 
     def getParametersManager(self) -> GundamParametersManager:
         self._requireParametersManager()
-        return self.parametersManager
+        return self._parametersManager
 
     def evaluateLlh(
         self,
@@ -184,9 +141,9 @@ class GundamInterface:
         with preservedWorkingDirectory():
             self._requireInitialized()
             if physicalValues is not None:
-                self.parametersManager.setParameterValues(physicalValues)
+                self._parametersManager.setParameterValues(physicalValues)
 
-            workingDirectory = Path(self.runtime.workDir).expanduser().resolve()
+            workingDirectory = Path(self._runtime.workDir).expanduser().resolve()
 
             with temporaryWorkingDirectory(workingDirectory):
                 self.engine.getLikelihoodInterface().propagateAndEvalLikelihood()
@@ -198,7 +155,7 @@ class GundamInterface:
     ) -> float:
         with preservedWorkingDirectory():
             self._requireInitialized()
-            workingDirectory = Path(self.runtime.workDir).expanduser().resolve()
+            workingDirectory = Path(self._runtime.workDir).expanduser().resolve()
 
             with temporaryWorkingDirectory(workingDirectory):
                 self.engine.getMinimizer().minimize()
@@ -224,7 +181,7 @@ class GundamInterface:
             self._requireInitialized()
             if nThrows < 1:
                 raise ValueError("nThrows must be >= 1")
-            workingDirectory = Path(self.runtime.workDir).expanduser().resolve()
+            workingDirectory = Path(self._runtime.workDir).expanduser().resolve()
 
             physicalValues = np.empty((nThrows, self.priors.shape[0]), dtype=np.float64)
             llh = np.empty(nThrows, dtype=np.float64)
@@ -241,7 +198,7 @@ class GundamInterface:
                     )
                 for throwIndex in throwIterator:
                     minimizer.throwPostfitParameters()
-                    physicalValues[throwIndex] = self.parametersManager.getParameterValues()
+                    physicalValues[throwIndex] = self._parametersManager.getParameterValues()
                     likelihoodInterface.propagateAndEvalLikelihood()
                     llh[throwIndex] = float(likelihoodInterface.getLastLikelihood())
 
@@ -252,25 +209,25 @@ class GundamInterface:
 
     def setSeed(self, seed: int | None = None) -> None:
         self._requireConfigured()
-        seed = self.runtime.randomSeed if seed is None else seed
+        seed = self._runtime.randomSeed if seed is None else seed
         self._setEngineRandomSeed(self.engine, seed)
 
     def _buildConfigBuilder(self, gundam):
-        if self.runtime.configJsonString is not None:
+        if self._runtime.configJsonString is not None:
             configBuilder = self._buildConfigBuilderFromJsonString(
                 gundam,
-                self.runtime.configJsonString,
+                self._runtime.configJsonString,
             )
-        elif self.runtime.configPath is not None:
-            configPath = Path(self.runtime.absoluteConfigPath).expanduser().resolve()
+        elif self._runtime.configPath is not None:
+            configPath = Path(self._runtime.absoluteConfigPath).expanduser().resolve()
             configBuilder = gundam.ConfigUtils.ConfigBuilder(str(configPath))
         else:
-            outputRootPath = Path(self.runtime.absoluteOutputRootPath).expanduser().resolve()
+            outputRootPath = Path(self._runtime.absoluteOutputRootPath).expanduser().resolve()
             configBuilder = gundam.ConfigUtils.ConfigBuilder(str(outputRootPath))
 
         overridePaths = [
             Path(overridePath).expanduser().resolve()
-            for overridePath in self.runtime.absoluteOverridePaths
+            for overridePath in self._runtime.absoluteOverridePaths
         ]
         for overridePath in overridePaths:
             configBuilder.override(str(overridePath))
@@ -291,10 +248,10 @@ class GundamInterface:
             return gundam.ConfigUtils.ConfigBuilder(str(configFile.name))
 
     def _loadDataHistogramsIfAvailable(self) -> None:
-        if self.runtime.outputRootPath is None or not self.runtime.loadDataHistograms:
+        if self._runtime.outputRootPath is None or not self._runtime.loadDataHistograms:
             return
 
-        stateReader = GundamRootStateReader(self.runtime.absoluteOutputRootPath)
+        stateReader = GundamRootStateReader(self._runtime.absoluteOutputRootPath)
         for sample in self.dataSamples:
             sampleName = str(sample.handle.getName())
             histogramState = stateReader.readDataHistogram(sampleName)
@@ -314,14 +271,14 @@ class GundamInterface:
                 binContent.sqrtSumSqWeights = float(sqrtSumSqWeight)
 
     def _loadPostFitStateIfRequested(self) -> None:
-        if not self.runtime.loadPostFitState:
+        if not self._runtime.loadPostFitState:
             return
 
-        gundam = self.importGundam()
-        stateReader = GundamRootStateReader(self.runtime.absoluteOutputRootPath)
+        gundam = self._runtime.loader.importGundam()
+        stateReader = GundamRootStateReader(self._runtime.absoluteOutputRootPath)
         stateConfigBuilder = stateReader.buildPostFitParameterStateConfig(gundam)
         self._requireParametersManager()
-        self.parametersManager.injectParametersState(stateConfigBuilder.toString())
+        self._parametersManager.injectParametersState(stateConfigBuilder.toString())
 
     @staticmethod
     def _setEngineRandomSeed(engine, seed: int | None) -> None:
@@ -334,14 +291,19 @@ class GundamInterface:
 
     def _setLikelihoodDataType(self) -> None:
         self._requireConfigured()
-        gundam = self.importGundam()
+        gundam = self._runtime.loader.importGundam()
         likelihoodInterface = self.engine.getLikelihoodInterface()
-        dataType = getattr(gundam.LikelihoodInterface.DataType, self.runtime.dataType)
+        dataType = getattr(gundam.LikelihoodInterface.DataType, self._runtime.dataType)
         likelihoodInterface.setDataType(dataType)
 
     def _requireConfigured(self) -> None:
         if self.engine is None:
             raise RuntimeError("GundamInterface.configure() must be called first")
+
+    def _requireParametersManager(self) -> None:
+        self._requireConfigured()
+        if self._parametersManager is None:
+            raise RuntimeError("GundamInterface parameters manager is not available")
 
     def _requireInitialized(self) -> None:
         if not self._isInitialized:
