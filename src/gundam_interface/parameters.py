@@ -8,25 +8,40 @@ import numpy as np
 
 @dataclass(slots=True)
 class GundamParameter:
-    """Small Python-side descriptor for an enabled GUNDAM parameter."""
+    """Light Python-side view over a GUNDAM Parameter handle."""
 
-    index: int
-    parameterIndex: int
-    name: str
-    prior: float
-    stepSize: float
-    throwValue: float | None
-    handle: Any
+    _handle: Any
+
+    @property
+    def name(self) -> str:
+        return str(self._handle.getName())
+
+    @property
+    def getFullTitle(self):
+        return str(self._handle.getFullTitle())
+
+    @property
+    def isEnabled(self) -> bool:
+        return bool(self._handle.isEnabled())
+
+    @property
+    def stepSize(self) -> float:
+        return float(self._handle.getStepSize())
+
+    @property
+    def prior(self) -> float:
+        return float(self._handle.getPriorValue())
+
+    @property
+    def throwValue(self) -> float:
+        return float(self._handle.getThrowValue())
 
     @property
     def value(self) -> float:
-        return float(self.handle.getParameterValue())
+        return float(self._handle.getParameterValue())
 
     def setValue(self, value: float) -> None:
-        self.handle.setParameterValue(float(value), True)
-
-    def resetToPrior(self) -> None:
-        self.setValue(self.prior)
+        self._handle.setParameterValue(float(value), True)
 
 
 @dataclass(slots=True)
@@ -42,35 +57,15 @@ class GundamParameterSet:
     @property
     def parameters(self) -> list[GundamParameter]:
         parameters: list[GundamParameter] = []
-        for parameterIndex, parameter in enumerate(self._handle.getParameterList()):
-            parameters.append(
-                GundamParameter(
-                    index=parameterIndex,
-                    parameterIndex=parameterIndex,
-                    name=parameter.getFullTitle(),
-                    prior=float(parameter.getPriorValue()),
-                    stepSize=float(parameter.getStepSize()),
-                    throwValue=None,
-                    handle=parameter,
-                )
-            )
+        for parameter in self._handle.getParameterList():
+            parameters.append(GundamParameter(_handle=parameter))
         return parameters
 
     @property
     def eigenParameters(self) -> list[GundamParameter]:
         parameters: list[GundamParameter] = []
-        for parameterIndex, parameter in enumerate(self._handle.getEigenParameterList()):
-            parameters.append(
-                GundamParameter(
-                    index=parameterIndex,
-                    parameterIndex=parameterIndex,
-                    name=parameter.getFullTitle(),
-                    prior=float(parameter.getPriorValue()),
-                    stepSize=float(parameter.getStepSize()),
-                    throwValue=None,
-                    handle=parameter,
-                )
-            )
+        for parameter in self._handle.getEigenParameterList():
+            parameters.append(GundamParameter(_handle=parameter))
         return parameters
 
     @property
@@ -103,7 +98,7 @@ def collectActiveParameters(
 ) -> list[GundamParameter]:
     parameters: list[GundamParameter] = []
     for parameterSet in parametersManager.getParameterSetsList():
-        for parameterIndex, parameter in enumerate(parameterSet.getParameterList()):
+        for parameter in parameterSet.getParameterList():
             if not parameter.isEnabled():
                 continue
 
@@ -114,17 +109,7 @@ def collectActiveParameters(
                 )
 
             parameters.append(
-                GundamParameter(
-                    index=len(parameters),
-                    parameterIndex=parameterIndex,
-                    name=parameter.getFullTitle(),
-                    prior=float(parameter.getPriorValue()),
-                    stepSize=stepSize,
-                    throwValue=(
-                        getParameterThrowValue(parameter) if includeThrowValues else None
-                    ),
-                    handle=parameter,
-                )
+                GundamParameter(_handle=parameter)
             )
     return parameters
 
@@ -138,7 +123,8 @@ def parameterSteps(parameters: list[GundamParameter]) -> np.ndarray:
 
 
 def parameterThrowValues(parameters: list[GundamParameter]) -> np.ndarray | None:
-    values = [parameter.throwValue for parameter in parameters]
-    if any(value is None for value in values):
+    try:
+        values = [parameter.throwValue for parameter in parameters]
+    except Exception:
         return None
     return np.array(values, dtype=np.float64)
