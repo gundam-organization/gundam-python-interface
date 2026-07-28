@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tempfile
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -116,8 +117,8 @@ class GundamInterface:
                 self._loadPostFitStateIfRequested()
             self._isInitialized = True
 
-    def getParametersManager(self) -> GundamParametersManager:
-        self._requireParametersManager()
+    def getParametersManager(self) -> GundamParametersManager | None:
+        self._requireConfigured()
         return self._parametersManager
 
     def evaluateLlh(
@@ -264,7 +265,7 @@ class GundamInterface:
         gundam = self._runtime.loader.importGundam()
         stateReader = GundamRootStateReader(self._runtime.absoluteOutputRootPath)
         stateConfigBuilder = stateReader.buildPostFitParameterStateConfig(gundam)
-        self._requireParametersManager()
+        self._requireConfigured()
         self._parametersManager.injectParametersState(stateConfigBuilder.toString())
 
     @staticmethod
@@ -286,11 +287,6 @@ class GundamInterface:
     def _requireConfigured(self) -> None:
         if self.engine is None:
             raise RuntimeError("GundamInterface.configure() must be called first")
-
-    def _requireParametersManager(self) -> None:
-        self._requireConfigured()
-        if self._parametersManager is None:
-            raise RuntimeError("GundamInterface parameters manager is not available")
 
     def _requireInitialized(self) -> None:
         if not self._isInitialized:
