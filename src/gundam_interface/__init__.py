@@ -9,6 +9,7 @@ from .logging import (
     redirectNativeOutput,
     temporaryRedirectNativeOutput,
 )
+from .minimizer import GundamMinimizer
 from .parameters import (
     GundamParameter,
     GundamParameterSet,
@@ -24,6 +25,7 @@ __all__ = [
     "GundamHistogram",
     "GundamCovarianceMatrix",
     "GundamLoader",
+    "GundamMinimizer",
     "GundamParameter",
     "GundamParameterSet",
     "GundamParametersManager",

@@ -7,6 +7,7 @@ from typing import Any
 
 import numpy as np
 
+from .minimizer import GundamMinimizer
 from .parameters import GundamParametersManager
 from .root_state import GundamRootStateReader
 from .runtime import GundamRuntime
@@ -34,6 +35,7 @@ class GundamInterface:
 
         # Interface views
         self._parametersManager: GundamParametersManager | None = None
+        self._minimizer: GundamMinimizer | None = None
 
         # Internals
         self._isConfigured = False
@@ -41,6 +43,12 @@ class GundamInterface:
 
     def getRuntime(self) -> GundamRuntime:
         return self._runtime
+
+    def getMinimizer(self) -> GundamMinimizer:
+        self._requireConfigured()
+        if self._minimizer is None:
+            raise RuntimeError("GUNDAM minimizer is not available")
+        return self._minimizer
 
     @property
     def modelSamples(self) -> GundamSamples:
@@ -53,11 +61,6 @@ class GundamInterface:
         self._requireConfigured()
         propagator = self.engine.getLikelihoodInterface().getDataPropagator()
         return GundamSamples(propagator=propagator)
-
-    @property
-    def minimizerFitParameters(self):
-        self._requireConfigured()
-        return self.engine.getMinimizer().getMinimizerFitParameterPtr()
 
     def configure(self, validatePaths: bool = True) -> None:
         with preservedWorkingDirectory():
@@ -76,6 +79,7 @@ class GundamInterface:
             self._parametersManager = GundamParametersManager(
                 _handle=engine.getLikelihoodInterface().getModelPropagator().getParametersManager()
             )
+            self._minimizer = GundamMinimizer(_handle=engine.getMinimizer())
             self._isConfigured = True
             self._isInitialized = False
 
@@ -118,17 +122,6 @@ class GundamInterface:
                 self.engine.getLikelihoodInterface().propagateAndEvalLikelihood()
                 return float(self.engine.getLikelihoodInterface().getLastLikelihood())
 
-    def minimize(
-        self,
-        logPath: str | os.PathLike[str] | None = None,
-    ) -> float:
-        with preservedWorkingDirectory():
-            self._requireInitialized()
-            with self._runtime.runFromWorkingDirectory():
-                self.engine.getMinimizer().minimize()
-
-            return float(self.engine.getLikelihoodInterface().getLastLikelihood())
-
     def evaluatePostfitThrows(
         self,
         nThrows: int,
@@ -144,15 +137,21 @@ class GundamInterface:
         """
         from tqdm.auto import tqdm
 
+        del logPath
         with preservedWorkingDirectory():
             self._requireInitialized()
             if nThrows < 1:
                 raise ValueError("nThrows must be >= 1")
-            physicalValues = np.empty((nThrows, self.priors.shape[0]), dtype=np.float64)
+            parametersManager = self.getParametersManager()
+            if parametersManager is None:
+                raise RuntimeError("GUNDAM parameters manager is not available")
+            physicalValues = np.empty(
+                (nThrows, parametersManager.getParameterValues().shape[0]),
+                dtype=np.float64,
+            )
             llh = np.empty(nThrows, dtype=np.float64)
 
             with self._runtime.runFromWorkingDirectory():
-                minimizer = self.engine.getMinimizer()
                 likelihoodInterface = self.engine.getLikelihoodInterface()
                 throwIterator = range(nThrows)
                 if showProgress:
@@ -162,8 +161,8 @@ class GundamInterface:
                         unit="throw",
                     )
                 for throwIndex in throwIterator:
-                    minimizer.throwPostfitParameters()
-                    physicalValues[throwIndex] = self._parametersManager.getParameterValues()
+                    self.minimizer.throwPostfitParameters()
+                    physicalValues[throwIndex] = parametersManager.getParameterValues()
                     likelihoodInterface.propagateAndEvalLikelihood()
                     llh[throwIndex] = float(likelihoodInterface.getLastLikelihood())
 

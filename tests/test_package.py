@@ -25,6 +25,7 @@ def test_package_exposes_public_api() -> None:
     assert gundam_interface.GundamRuntime.__name__ == "GundamRuntime"
     assert gundam_interface.GundamInterface.__name__ == "GundamInterface"
     assert gundam_interface.GundamLoader.__name__ == "GundamLoader"
+    assert gundam_interface.GundamMinimizer.__name__ == "GundamMinimizer"
     assert gundam_interface.GundamParameter.__name__ == "GundamParameter"
     assert gundam_interface.GundamHistogram.__name__ == "GundamHistogram"
     assert gundam_interface.GundamSample.__name__ == "GundamSample"
@@ -438,11 +439,25 @@ def test_gundam_interface_exposes_minimizer_fit_parameters(tmp_path) -> None:
             loader=gundam_interface.GundamLoader(),
             configPath="config.yaml",
         ),
-        gundam=None,
     )
     interface.engine = FakeEngineWithMinimizer(FakeMinimizer(fitParameters))
+    interface._minimizer = gundam_interface.GundamMinimizer(_handle=interface.engine.getMinimizer())
 
     assert interface.minimizerFitParameters is fitParameters
+    assert interface.minimizer.fitParameters is fitParameters
+
+
+def test_gundam_interface_exposes_minimizer_view(tmp_path) -> None:
+    interface = gundam_interface.GundamInterface(
+        runtime=gundam_interface.GundamRuntime(
+            workDir=tmp_path,
+            loader=gundam_interface.GundamLoader(),
+            configPath="config.yaml",
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="configure"):
+        _ = interface.minimizer
 
 
 def test_build_config_builder_prefers_config_path_over_output_root(tmp_path) -> None:
