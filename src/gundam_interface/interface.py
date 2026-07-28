@@ -78,11 +78,14 @@ class GundamInterface:
 
     @property
     def throwValues(self) -> np.ndarray | None:
-        return parameterThrowValues(self.parameters)
+        return parameterThrowValues(
+            self.parameters,
+            includeThrowValues=self.runtime.dataType == "Toy",
+        )
 
     @property
     def parameterNames(self) -> list[str]:
-        return [parameter.name for parameter in self.parameters]
+        return [parameter.getName() for parameter in self.parameters]
 
     @property
     def modelSamples(self) -> GundamSamples:
@@ -247,13 +250,12 @@ class GundamInterface:
         )
         self.parameters = collectActiveParameters(
             parametersManager,
-            includeThrowValues=self.runtime.dataType == "Toy",
         )
         return self.parameters
 
     def getParameterValues(self) -> np.ndarray:
         self._requireParameters()
-        return np.array([parameter.value for parameter in self.parameters], dtype=np.float64)
+        return np.array([parameter.getValue() for parameter in self.parameters], dtype=np.float64)
 
     def setParameterValues(self, values: np.ndarray) -> None:
         self._requireParameters()
@@ -266,7 +268,7 @@ class GundamInterface:
     def resetToPrior(self) -> None:
         self._requireParameters()
         for parameter in self.parameters:
-            parameter.setValue(parameter.prior)
+            parameter.setValue(parameter.getPriorValue())
 
     def evaluateLlh(
         self,

@@ -12,32 +12,25 @@ class GundamParameter:
 
     _handle: Any
 
-    @property
-    def name(self) -> str:
+    def getName(self) -> str:
         return str(self._handle.getName())
 
-    @property
-    def getFullTitle(self):
+    def getFullTitle(self) -> str:
         return str(self._handle.getFullTitle())
 
-    @property
     def isEnabled(self) -> bool:
         return bool(self._handle.isEnabled())
 
-    @property
-    def stepSize(self) -> float:
+    def getStepSize(self) -> float:
         return float(self._handle.getStepSize())
 
-    @property
-    def prior(self) -> float:
+    def getPriorValue(self) -> float:
         return float(self._handle.getPriorValue())
 
-    @property
-    def throwValue(self) -> float:
+    def getThrowValue(self) -> float:
         return float(self._handle.getThrowValue())
 
-    @property
-    def value(self) -> float:
+    def getValue(self) -> float:
         return float(self._handle.getParameterValue())
 
     def setValue(self, value: float) -> None:
@@ -83,18 +76,12 @@ class GundamParameterSet:
         self._handle.propagateEigenToOriginal()
 
 
-def getParameterThrowValue(parameter: Any) -> float:
-    return float(parameter.getThrowValue())
-
-
 def wrapParameterSetList(parameterSets: Any) -> list[GundamParameterSet]:
     return [GundamParameterSet(_handle=parameterSet) for parameterSet in parameterSets]
 
 
 def collectActiveParameters(
     parametersManager: Any,
-    *,
-    includeThrowValues: bool = False,
 ) -> list[GundamParameter]:
     parameters: list[GundamParameter] = []
     for parameterSet in parametersManager.getParameterSetsList():
@@ -115,16 +102,18 @@ def collectActiveParameters(
 
 
 def parameterPriors(parameters: list[GundamParameter]) -> np.ndarray:
-    return np.array([parameter.prior for parameter in parameters], dtype=np.float64)
+    return np.array([parameter.getPriorValue() for parameter in parameters], dtype=np.float64)
 
 
 def parameterSteps(parameters: list[GundamParameter]) -> np.ndarray:
-    return np.array([parameter.stepSize for parameter in parameters], dtype=np.float64)
+    return np.array([parameter.getStepSize() for parameter in parameters], dtype=np.float64)
 
 
-def parameterThrowValues(parameters: list[GundamParameter]) -> np.ndarray | None:
-    try:
-        values = [parameter.throwValue for parameter in parameters]
-    except Exception:
+def parameterThrowValues(
+    parameters: list[GundamParameter],
+    *,
+    includeThrowValues: bool = False,
+) -> np.ndarray | None:
+    if not includeThrowValues:
         return None
-    return np.array(values, dtype=np.float64)
+    return np.array([parameter.getThrowValue() for parameter in parameters], dtype=np.float64)
