@@ -152,41 +152,6 @@ class GundamInterface:
             )
             self._isInitialized = False
 
-    def _buildConfigBuilder(self, gundam):
-        if self.runtime.configJsonString is not None:
-            configBuilder = self._buildConfigBuilderFromJsonString(
-                gundam,
-                self.runtime.configJsonString,
-            )
-        elif self.runtime.configPath is not None:
-            configPath = Path(self.runtime.absoluteConfigPath).expanduser().resolve()
-            configBuilder = gundam.ConfigUtils.ConfigBuilder(str(configPath))
-        else:
-            outputRootPath = Path(self.runtime.absoluteOutputRootPath).expanduser().resolve()
-            configBuilder = gundam.ConfigUtils.ConfigBuilder(str(outputRootPath))
-
-        overridePaths = [
-            Path(overridePath).expanduser().resolve()
-            for overridePath in self.runtime.absoluteOverridePaths
-        ]
-        for overridePath in overridePaths:
-            configBuilder.override(str(overridePath))
-        return configBuilder
-
-    @staticmethod
-    def _buildConfigBuilderFromJsonString(gundam, configJsonString: str):
-        # The Python binding exposes ConfigBuilder(str), but that overload expects a file path.
-        # Keep the public API string-based and isolate the temporary bridge here.
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            suffix=".json",
-            encoding="utf-8",
-            delete=True,
-        ) as configFile:
-            configFile.write(configJsonString)
-            configFile.flush()
-            return gundam.ConfigUtils.ConfigBuilder(str(configFile.name))
-
     def initialize(
         self,
         logPath: str | os.PathLike[str] | None = None,
@@ -210,63 +175,9 @@ class GundamInterface:
                 self._loadPostFitStateIfRequested()
             self._isInitialized = True
 
-    def _loadDataHistogramsIfAvailable(self) -> None:
-        if self.runtime.outputRootPath is None or not self.runtime.loadDataHistograms:
-            return
-
-        stateReader = GundamRootStateReader(self.runtime.absoluteOutputRootPath)
-        for sample in self.dataSamples:
-            sampleName = str(sample.handle.getName())
-            histogramState = stateReader.readDataHistogram(sampleName)
-            binContents = sample.histogram.binContents
-            if len(binContents) != histogramState.sumWeights.shape[0]:
-                raise ValueError(
-                    f"Mismatching bin number for data sample '{sampleName}': "
-                    f"ROOT histogram has {histogramState.sumWeights.shape[0]} bins, "
-                    f"GUNDAM sample has {len(binContents)} bins"
-                )
-            for binContent, sumWeight, sqrtSumSqWeight in zip(
-                binContents,
-                histogramState.sumWeights,
-                histogramState.sqrtSumSqWeights,
-            ):
-                binContent.sumWeights = float(sumWeight)
-                binContent.sqrtSumSqWeights = float(sqrtSumSqWeight)
-
-    def _loadPostFitStateIfRequested(self) -> None:
-        if not self.runtime.loadPostFitState:
-            return
-
-        gundam = self.importGundam()
-        stateReader = GundamRootStateReader(self.runtime.absoluteOutputRootPath)
-        stateConfigBuilder = stateReader.buildPostFitParameterStateConfig(gundam)
+    def getParametersManager(self) -> GundamParametersManager:
         self._requireParametersManager()
-        self.parametersManager.injectParametersState(stateConfigBuilder.toString())
-
-    def getParameterSetList(self):
-        self._requireParametersManager()
-        return self.parametersManager.getParameterSetList()
-
-    def getParameterValues(self) -> np.ndarray:
-        self._requireInitialized()
-        return np.array(
-            [parameter.getValue() for parameter in self.parametersManager.getActiveParameterList()],
-            dtype=np.float64,
-        )
-
-    def setParameterValues(self, values: np.ndarray) -> None:
-        self._requireInitialized()
-        parameters = self.parametersManager.getActiveParameterList()
-        values = np.asarray(values, dtype=np.float64)
-        if values.shape != self.priors.shape:
-            raise ValueError(f"Expected parameter shape {self.priors.shape}, got {values.shape}")
-        for parameter, value in zip(parameters, values):
-            parameter.setValue(float(value))
-
-    def resetToPrior(self) -> None:
-        self._requireInitialized()
-        for parameter in self.parametersManager.getActiveParameterList():
-            parameter.setValue(parameter.getPrior())
+        return self.parametersManager
 
     def evaluateLlh(
         self,
@@ -276,7 +187,7 @@ class GundamInterface:
         with preservedWorkingDirectory():
             self._requireInitialized()
             if physicalValues is not None:
-                self.setParameterValues(physicalValues)
+                self.parametersManager.setParameterValues(physicalValues)
 
             workingDirectory = Path(self.runtime.workDir).expanduser().resolve()
 
@@ -333,7 +244,7 @@ class GundamInterface:
                     )
                 for throwIndex in throwIterator:
                     minimizer.throwPostfitParameters()
-                    physicalValues[throwIndex] = self.getParameterValues()
+                    physicalValues[throwIndex] = self.parametersManager.getParameterValues()
                     likelihoodInterface.propagateAndEvalLikelihood()
                     llh[throwIndex] = float(likelihoodInterface.getLastLikelihood())
 
@@ -346,6 +257,74 @@ class GundamInterface:
         self._requireConfigured()
         seed = self.runtime.randomSeed if seed is None else seed
         self._setEngineRandomSeed(self.engine, seed)
+
+    def _buildConfigBuilder(self, gundam):
+        if self.runtime.configJsonString is not None:
+            configBuilder = self._buildConfigBuilderFromJsonString(
+                gundam,
+                self.runtime.configJsonString,
+            )
+        elif self.runtime.configPath is not None:
+            configPath = Path(self.runtime.absoluteConfigPath).expanduser().resolve()
+            configBuilder = gundam.ConfigUtils.ConfigBuilder(str(configPath))
+        else:
+            outputRootPath = Path(self.runtime.absoluteOutputRootPath).expanduser().resolve()
+            configBuilder = gundam.ConfigUtils.ConfigBuilder(str(outputRootPath))
+
+        overridePaths = [
+            Path(overridePath).expanduser().resolve()
+            for overridePath in self.runtime.absoluteOverridePaths
+        ]
+        for overridePath in overridePaths:
+            configBuilder.override(str(overridePath))
+        return configBuilder
+
+    @staticmethod
+    def _buildConfigBuilderFromJsonString(gundam, configJsonString: str):
+        # The Python binding exposes ConfigBuilder(str), but that overload expects a file path.
+        # Keep the public API string-based and isolate the temporary bridge here.
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".json",
+            encoding="utf-8",
+            delete=True,
+        ) as configFile:
+            configFile.write(configJsonString)
+            configFile.flush()
+            return gundam.ConfigUtils.ConfigBuilder(str(configFile.name))
+
+    def _loadDataHistogramsIfAvailable(self) -> None:
+        if self.runtime.outputRootPath is None or not self.runtime.loadDataHistograms:
+            return
+
+        stateReader = GundamRootStateReader(self.runtime.absoluteOutputRootPath)
+        for sample in self.dataSamples:
+            sampleName = str(sample.handle.getName())
+            histogramState = stateReader.readDataHistogram(sampleName)
+            binContents = sample.histogram.binContents
+            if len(binContents) != histogramState.sumWeights.shape[0]:
+                raise ValueError(
+                    f"Mismatching bin number for data sample '{sampleName}': "
+                    f"ROOT histogram has {histogramState.sumWeights.shape[0]} bins, "
+                    f"GUNDAM sample has {len(binContents)} bins"
+                )
+            for binContent, sumWeight, sqrtSumSqWeight in zip(
+                binContents,
+                histogramState.sumWeights,
+                histogramState.sqrtSumSqWeights,
+            ):
+                binContent.sumWeights = float(sumWeight)
+                binContent.sqrtSumSqWeights = float(sqrtSumSqWeight)
+
+    def _loadPostFitStateIfRequested(self) -> None:
+        if not self.runtime.loadPostFitState:
+            return
+
+        gundam = self.importGundam()
+        stateReader = GundamRootStateReader(self.runtime.absoluteOutputRootPath)
+        stateConfigBuilder = stateReader.buildPostFitParameterStateConfig(gundam)
+        self._requireParametersManager()
+        self.parametersManager.injectParametersState(stateConfigBuilder.toString())
 
     @staticmethod
     def _setEngineRandomSeed(engine, seed: int | None) -> None:

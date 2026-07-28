@@ -4,6 +4,8 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
+import numpy as np
+
 from .utils import GundamCovarianceMatrix
 
 
@@ -93,3 +95,22 @@ class GundamParametersManager:
                 if parameter.isEnabled():
                     out.append(parameter)
         return out
+
+    def getParameterValues(self) -> np.ndarray:
+        return np.array(
+            [parameter.getValue() for parameter in self.getActiveParameterList()],
+            dtype=np.float64,
+        )
+
+    def setParameterValues(self, values: np.ndarray) -> None:
+        parameters = self.getActiveParameterList()
+        values = np.asarray(values, dtype=np.float64)
+        expectedShape = (len(parameters),)
+        if values.shape != expectedShape:
+            raise ValueError(f"Expected parameter shape {expectedShape}, got {values.shape}")
+        for parameter, value in zip(parameters, values):
+            parameter.setValue(float(value))
+
+    def resetToPrior(self) -> None:
+        for parameter in self.getActiveParameterList():
+            parameter.setValue(parameter.getPrior())
