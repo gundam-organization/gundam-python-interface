@@ -46,9 +46,16 @@ class GundamInterface:
     """Thin Python wrapper around the GUNDAM fitting interface."""
 
     def __init__(self, runtime: GundamRuntime):
+        # Externals
         self._runtime = runtime
+
+        # GUNDAM objects
         self.engine: Any | None = None
+
+        # Interface views
         self._parametersManager: GundamParametersManager | None = None
+
+        # Internals
         self._isConfigured = False
         self._isInitialized = False
 
