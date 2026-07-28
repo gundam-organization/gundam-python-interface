@@ -7,6 +7,7 @@ import pytest
 
 import gundam_interface
 from gundam_interface.internal.logging import GundamLogRedirector
+from gundam_interface.internal.parameters import GundamParametersManager
 from gundam_interface.internal.minimizer import GundamMinimizer
 from gundam_interface.internal.samples import GundamHistogram, GundamSamples
 
@@ -153,14 +154,13 @@ def test_gundam_runtime_owns_log_redirector(tmp_path) -> None:
 def test_gundam_interface_methods_do_not_expose_log_debug_option() -> None:
     assert "debugLogRedirection" not in signature(gundam_interface.GundamInterface.initialize).parameters
     assert "debugLogRedirection" not in signature(gundam_interface.GundamInterface.evaluateLlh).parameters
-    assert "debugLogRedirection" not in signature(gundam_interface.GundamInterface.minimize).parameters
 
 
 def test_evaluate_llh_does_not_auto_redirect_without_log_path(tmp_path) -> None:
     likelihoodInterface = FakeEvaluatingLikelihoodInterface(llh=12.5)
     interface = makeConfiguredInterface(tmp_path, FakeEngine(likelihoodInterface))
     redirector = RecordingRedirector()
-    interface.runtime.logRedirector = redirector
+    interface.getRuntime().logRedirector = redirector
 
     llh = interface.evaluateLlh()
 
@@ -173,7 +173,7 @@ def test_evaluate_llh_does_not_redirect_with_log_path(tmp_path) -> None:
     likelihoodInterface = FakeEvaluatingLikelihoodInterface(llh=12.5)
     interface = makeConfiguredInterface(tmp_path, FakeEngine(likelihoodInterface))
     redirector = RecordingRedirector()
-    interface.runtime.logRedirector = redirector
+    interface.getRuntime().logRedirector = redirector
 
     llh = interface.evaluateLlh(logPath=tmp_path / "evaluate.log")
 
@@ -182,40 +182,17 @@ def test_evaluate_llh_does_not_redirect_with_log_path(tmp_path) -> None:
     assert redirector.calls == []
 
 
-def test_minimize_does_not_auto_redirect_without_log_path(tmp_path) -> None:
+def test_get_minimizer_exposes_minimize(tmp_path) -> None:
     likelihoodInterface = FakeEvaluatingLikelihoodInterface(llh=4.0)
     minimizer = FakeRecordingMinimizer()
     interface = makeConfiguredInterface(
         tmp_path,
         FakeEngineWithLikelihoodAndMinimizer(likelihoodInterface, minimizer),
     )
-    interface.refreshParameters = lambda: interface.parameters
-    redirector = RecordingRedirector()
-    interface.runtime.logRedirector = redirector
 
-    llh = interface.minimize()
+    interface.getMinimizer().minimize()
 
-    assert llh == 4.0
     assert minimizer.minimizeCount == 1
-    assert redirector.calls == []
-
-
-def test_minimize_does_not_redirect_with_log_path(tmp_path) -> None:
-    likelihoodInterface = FakeEvaluatingLikelihoodInterface(llh=4.0)
-    minimizer = FakeRecordingMinimizer()
-    interface = makeConfiguredInterface(
-        tmp_path,
-        FakeEngineWithLikelihoodAndMinimizer(likelihoodInterface, minimizer),
-    )
-    interface.refreshParameters = lambda: interface.parameters
-    redirector = RecordingRedirector()
-    interface.runtime.logRedirector = redirector
-
-    llh = interface.minimize(logPath=tmp_path / "minimize.log")
-
-    assert llh == 4.0
-    assert minimizer.minimizeCount == 1
-    assert redirector.calls == []
 
 
 def test_gundam_samples_exposes_histogram_sum_weights() -> None:
@@ -420,7 +397,6 @@ def test_gundam_interface_exposes_model_and_data_samples(tmp_path) -> None:
             loader=gundam_interface.GundamLoader(),
             configPath="config.yaml",
         ),
-        gundam=None,
     )
     interface.engine = FakeEngine(
         FakeLikelihoodInterface(
@@ -444,9 +420,14 @@ def test_gundam_interface_exposes_minimizer_fit_parameters(tmp_path) -> None:
     )
     interface.engine = FakeEngineWithMinimizer(FakeMinimizer(fitParameters))
     interface._minimizer = GundamMinimizer(_handle=interface.engine.getMinimizer())
+    interface._isConfigured = True
 
-    assert interface.minimizerFitParameters is fitParameters
-    assert interface.minimizer.fitParameters is fitParameters
+    minimizer = interface.getMinimizer()
+    wrappedParameters = minimizer.getFitParameters()
+
+    assert len(wrappedParameters) == 2
+    assert wrappedParameters[0]._handle is fitParameters[0]
+    assert wrappedParameters[1]._handle is fitParameters[1]
 
 
 def test_gundam_interface_exposes_minimizer_view(tmp_path) -> None:
@@ -459,7 +440,7 @@ def test_gundam_interface_exposes_minimizer_view(tmp_path) -> None:
     )
 
     with pytest.raises(RuntimeError, match="configure"):
-        _ = interface.minimizer
+        interface.getMinimizer()
 
 
 def test_build_config_builder_prefers_config_path_over_output_root(tmp_path) -> None:
@@ -467,18 +448,15 @@ def test_build_config_builder_prefers_config_path_over_output_root(tmp_path) -> 
     (tmp_path / "fit.root").write_text("root", encoding="utf-8")
     (tmp_path / "override.yaml").write_text("override", encoding="utf-8")
     fakeGundam = FakeGundamModule()
-    interface = gundam_interface.GundamInterface(
-        runtime=gundam_interface.GundamRuntime(
-            workDir=tmp_path,
-            loader=gundam_interface.GundamLoader(),
-            configPath="config.yaml",
-            outputRootPath="fit.root",
-            overrideList=["override.yaml"],
-        ),
-        gundam=fakeGundam,
+    runtime = gundam_interface.GundamRuntime(
+        workDir=tmp_path,
+        loader=gundam_interface.GundamLoader(),
+        configPath="config.yaml",
+        outputRootPath="fit.root",
+        overrideList=["override.yaml"],
     )
 
-    configBuilder = interface._buildConfigBuilder(fakeGundam)
+    configBuilder = runtime._buildConfigBuilder(fakeGundam)
 
     assert configBuilder.source == str((tmp_path / "config.yaml").resolve())
     assert configBuilder.overrides == [str((tmp_path / "override.yaml").resolve())]
@@ -487,16 +465,13 @@ def test_build_config_builder_prefers_config_path_over_output_root(tmp_path) -> 
 def test_build_config_builder_uses_output_root_when_no_config_path(tmp_path) -> None:
     (tmp_path / "fit.root").write_text("root", encoding="utf-8")
     fakeGundam = FakeGundamModule()
-    interface = gundam_interface.GundamInterface(
-        runtime=gundam_interface.GundamRuntime(
-            workDir=tmp_path,
-            loader=gundam_interface.GundamLoader(),
-            outputRootPath="fit.root",
-        ),
-        gundam=fakeGundam,
+    runtime = gundam_interface.GundamRuntime(
+        workDir=tmp_path,
+        loader=gundam_interface.GundamLoader(),
+        outputRootPath="fit.root",
     )
 
-    configBuilder = interface._buildConfigBuilder(fakeGundam)
+    configBuilder = runtime._buildConfigBuilder(fakeGundam)
 
     assert configBuilder.source == str((tmp_path / "fit.root").resolve())
 
@@ -515,18 +490,17 @@ def test_initialize_loads_postfit_state_when_requested(tmp_path, monkeypatch) ->
         },
     )
     fakeGundam = FakeGundamModule()
-    interface = gundam_interface.GundamInterface(
-        runtime=gundam_interface.GundamRuntime(
-            workDir=tmp_path,
-            loader=gundam_interface.GundamLoader(),
-            configPath="config.yaml",
-            outputRootPath=outputRootPath,
-            loadPostFitState=True,
-        ),
-        gundam=fakeGundam,
+    runtime = gundam_interface.GundamRuntime(
+        workDir=tmp_path,
+        loader=gundam_interface.GundamLoader(),
+        configPath="config.yaml",
+        outputRootPath=outputRootPath,
+        loadPostFitState=True,
     )
+    runtime._gundamModule = fakeGundam
+    interface = gundam_interface.GundamInterface(runtime=runtime)
     interface.engine = FakeInitializableEngine(fakeParametersManager)
-    interface.refreshParameters = lambda: interface.parameters
+    interface._parametersManager = GundamParametersManager(_handle=fakeParametersManager)
 
     interface.initialize()
 
@@ -550,17 +524,16 @@ def test_initialize_restores_data_histograms_from_output_root_by_default(
         },
     )
     fakeGundam = FakeGundamModule()
-    interface = gundam_interface.GundamInterface(
-        runtime=gundam_interface.GundamRuntime(
-            workDir=tmp_path,
-            loader=gundam_interface.GundamLoader(),
-            configPath="config.yaml",
-            outputRootPath=outputRootPath,
-        ),
-        gundam=fakeGundam,
+    runtime = gundam_interface.GundamRuntime(
+        workDir=tmp_path,
+        loader=gundam_interface.GundamLoader(),
+        configPath="config.yaml",
+        outputRootPath=outputRootPath,
     )
+    runtime._gundamModule = fakeGundam
+    interface = gundam_interface.GundamInterface(runtime=runtime)
     interface.engine = FakeInitializableEngine(fakeParametersManager)
-    interface.refreshParameters = lambda: interface.parameters
+    interface._parametersManager = GundamParametersManager(_handle=fakeParametersManager)
 
     interface.initialize()
 
@@ -574,20 +547,19 @@ def test_initialize_can_skip_data_histograms_from_output_root(tmp_path) -> None:
     outputRootPath.write_text("root", encoding="utf-8")
     fakeParametersManager = FakeInjectingParametersManager()
     fakeGundam = FakeGundamModule()
-    interface = gundam_interface.GundamInterface(
-        runtime=gundam_interface.GundamRuntime(
-            workDir=tmp_path,
-            loader=gundam_interface.GundamLoader(),
-            configPath="config.yaml",
-            outputRootPath=outputRootPath,
-            loadDataHistograms=False,
-            dataType="Toy",
-            randomSeed=12345,
-        ),
-        gundam=fakeGundam,
+    runtime = gundam_interface.GundamRuntime(
+        workDir=tmp_path,
+        loader=gundam_interface.GundamLoader(),
+        configPath="config.yaml",
+        outputRootPath=outputRootPath,
+        loadDataHistograms=False,
+        dataType="Toy",
+        randomSeed=12345,
     )
+    runtime._gundamModule = fakeGundam
+    interface = gundam_interface.GundamInterface(runtime=runtime)
     interface.engine = FakeInitializableEngine(fakeParametersManager)
-    interface.refreshParameters = lambda: interface.parameters
+    interface._parametersManager = GundamParametersManager(_handle=fakeParametersManager)
 
     interface.initialize()
 
@@ -605,18 +577,19 @@ def test_initialize_fails_when_requested_postfit_state_is_missing(tmp_path, monk
         },
     )
     fakeGundam = FakeGundamModule()
-    interface = gundam_interface.GundamInterface(
-        runtime=gundam_interface.GundamRuntime(
-            workDir=tmp_path,
-            loader=gundam_interface.GundamLoader(),
-            configPath="config.yaml",
-            outputRootPath=outputRootPath,
-            loadPostFitState=True,
-        ),
-        gundam=fakeGundam,
+    runtime = gundam_interface.GundamRuntime(
+        workDir=tmp_path,
+        loader=gundam_interface.GundamLoader(),
+        configPath="config.yaml",
+        outputRootPath=outputRootPath,
+        loadPostFitState=True,
     )
+    runtime._gundamModule = fakeGundam
+    interface = gundam_interface.GundamInterface(runtime=runtime)
     interface.engine = FakeInitializableEngine(FakeInjectingParametersManager())
-    interface.refreshParameters = lambda: interface.parameters
+    interface._parametersManager = GundamParametersManager(
+        _handle=FakeInjectingParametersManager()
+    )
 
     with pytest.raises(KeyError, match="parameterStateAfterMinimize_TNamed"):
         interface.initialize()
@@ -635,17 +608,18 @@ def test_initialize_fails_when_saved_data_histogram_bin_count_mismatches(
         },
     )
     fakeGundam = FakeGundamModule()
-    interface = gundam_interface.GundamInterface(
-        runtime=gundam_interface.GundamRuntime(
-            workDir=tmp_path,
-            loader=gundam_interface.GundamLoader(),
-            configPath="config.yaml",
-            outputRootPath=outputRootPath,
-        ),
-        gundam=fakeGundam,
+    runtime = gundam_interface.GundamRuntime(
+        workDir=tmp_path,
+        loader=gundam_interface.GundamLoader(),
+        configPath="config.yaml",
+        outputRootPath=outputRootPath,
     )
+    runtime._gundamModule = fakeGundam
+    interface = gundam_interface.GundamInterface(runtime=runtime)
     interface.engine = FakeInitializableEngine(FakeInjectingParametersManager())
-    interface.refreshParameters = lambda: interface.parameters
+    interface._parametersManager = GundamParametersManager(
+        _handle=FakeInjectingParametersManager()
+    )
 
     with pytest.raises(ValueError, match="Mismatching bin number"):
         interface.initialize()
@@ -960,10 +934,12 @@ def makeConfiguredInterface(tmp_path, engine):
             loader=gundam_interface.GundamLoader(),
             configPath="config.yaml",
         ),
-        gundam=None,
     )
     interface.engine = engine
-    interface.parameters = [object()]
+    if hasattr(engine, "getMinimizer"):
+        interface._minimizer = GundamMinimizer(_handle=engine.getMinimizer())
+    interface._isConfigured = True
+    interface._isInitialized = True
     return interface
 
 
