@@ -5,6 +5,8 @@ from typing import Any
 
 import numpy as np
 
+from .utils import GundamCovarianceMatrix
+
 
 @dataclass(slots=True)
 class GundamParameter:
@@ -61,7 +63,7 @@ class GundamParameterSet:
         return out
 
     def getPriorCovarianceMatrix(self) -> Any:
-        return self._handle.getPriorCovarianceMatrix()
+        return GundamCovarianceMatrix(self._handle.getPriorCovarianceMatrix())
 
 
 def wrapParameterSetList(parameterSets: Any) -> list[GundamParameterSet]:

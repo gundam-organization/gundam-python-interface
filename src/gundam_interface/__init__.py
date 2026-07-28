@@ -18,11 +18,13 @@ from .parameters import (
 )
 from .runtime import GundamRuntime
 from .samples import GundamHistogram, GundamSample, GundamSamples
+from .utils import GundamCovarianceMatrix
 
 __all__ = [
     "__version__",
     "GundamInterface",
     "GundamHistogram",
+    "GundamCovarianceMatrix",
     "GundamLoader",
     "GundamParameter",
     "GundamRuntime",

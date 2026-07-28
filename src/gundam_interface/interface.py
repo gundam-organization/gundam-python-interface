@@ -15,6 +15,7 @@ from .parameters import (
     parameterPriors,
     parameterSteps,
     parameterThrowValues,
+    wrapParameterSetList,
 )
 from .root_state import GundamRootStateReader
 from .runtime import GundamRuntime
@@ -239,7 +240,13 @@ class GundamInterface:
 
     def getParameterSetList(self):
         self._requireConfigured()
-        return self.engine.getLikelihoodInterface().getModelPropagator().getParametersManager().getParameterSetList()
+        parameterSets = (
+            self.engine.getLikelihoodInterface()
+            .getModelPropagator()
+            .getParametersManager()
+            .getParameterSetsList()
+        )
+        return wrapParameterSetList(parameterSets)
 
     def refreshParameters(self) -> list[GundamParameter]:
         self._requireConfigured()
