@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -216,6 +217,11 @@ class GundamRuntime:
             json.dump(self.toDict(), file, indent=2, sort_keys=True)
             file.write("\n")
 
+    def getConfigReader(self) -> Any:
+        gundam = self.loader.importGundam()
+        configBuilder = self._buildConfigBuilder(gundam)
+        return gundam.ConfigUtils.ConfigReader(configBuilder.getConfig())
+
     @staticmethod
     def _canonicalDataType(dataType: str | None, forceAsimov: bool | None) -> str:
         if dataType is None:
@@ -290,3 +296,30 @@ class GundamRuntime:
         for overridePath in self.absoluteOverridePaths:
             if not overridePath.exists():
                 raise FileNotFoundError(f"GUNDAM override file does not exist: {overridePath}")
+
+    def _buildConfigBuilder(self, gundam: Any) -> Any:
+        if self.configJsonString is not None:
+            configBuilder = self._buildConfigBuilderFromJsonString(
+                gundam,
+                self.configJsonString,
+            )
+        elif self.configPath is not None:
+            configBuilder = gundam.ConfigUtils.ConfigBuilder(str(self.absoluteConfigPath))
+        else:
+            configBuilder = gundam.ConfigUtils.ConfigBuilder(str(self.absoluteOutputRootPath))
+
+        for overridePath in self.absoluteOverridePaths:
+            configBuilder.override(str(overridePath))
+        return configBuilder
+
+    @staticmethod
+    def _buildConfigBuilderFromJsonString(gundam: Any, configJsonString: str) -> Any:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".json",
+            encoding="utf-8",
+            delete=True,
+        ) as configFile:
+            configFile.write(configJsonString)
+            configFile.flush()
+            return gundam.ConfigUtils.ConfigBuilder(str(configFile.name))

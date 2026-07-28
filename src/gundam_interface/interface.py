@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import tempfile
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -72,10 +71,7 @@ class GundamInterface:
             gundam.setRuntimeWorkingDirectory(str(workingDirectory))
 
             with temporaryWorkingDirectory(workingDirectory):
-                configBuilder = self._buildConfigBuilder(gundam)
-                configJsonString = configBuilder.toString()
-
-                configReader = gundam.ConfigUtils.ConfigReader(configBuilder.getConfig())
+                configReader = self._runtime.getConfigReader()
                 configReader.defineField(
                     gundam.ConfigUtils.ConfigReader.FieldDefinition("fitterEngineConfig")
                 )
@@ -199,41 +195,6 @@ class GundamInterface:
         self._requireConfigured()
         seed = self._runtime.randomSeed if seed is None else seed
         self._setEngineRandomSeed(self.engine, seed)
-
-    def _buildConfigBuilder(self, gundam):
-        if self._runtime.configJsonString is not None:
-            configBuilder = self._buildConfigBuilderFromJsonString(
-                gundam,
-                self._runtime.configJsonString,
-            )
-        elif self._runtime.configPath is not None:
-            configPath = Path(self._runtime.absoluteConfigPath).expanduser().resolve()
-            configBuilder = gundam.ConfigUtils.ConfigBuilder(str(configPath))
-        else:
-            outputRootPath = Path(self._runtime.absoluteOutputRootPath).expanduser().resolve()
-            configBuilder = gundam.ConfigUtils.ConfigBuilder(str(outputRootPath))
-
-        overridePaths = [
-            Path(overridePath).expanduser().resolve()
-            for overridePath in self._runtime.absoluteOverridePaths
-        ]
-        for overridePath in overridePaths:
-            configBuilder.override(str(overridePath))
-        return configBuilder
-
-    @staticmethod
-    def _buildConfigBuilderFromJsonString(gundam, configJsonString: str):
-        # The Python binding exposes ConfigBuilder(str), but that overload expects a file path.
-        # Keep the public API string-based and isolate the temporary bridge here.
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            suffix=".json",
-            encoding="utf-8",
-            delete=True,
-        ) as configFile:
-            configFile.write(configJsonString)
-            configFile.flush()
-            return gundam.ConfigUtils.ConfigBuilder(str(configFile.name))
 
     def _loadDataHistogramsIfAvailable(self) -> None:
         if self._runtime.outputRootPath is None or not self._runtime.loadDataHistograms:
