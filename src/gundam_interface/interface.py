@@ -9,7 +9,7 @@ from typing import Any, Iterator
 
 import numpy as np
 
-from .parameters import GundamParameter
+from .parameters import GundamParameter, GundamParametersManager
 from .root_state import GundamRootStateReader
 from .runtime import GundamRuntime
 from .samples import GundamSamples
@@ -52,6 +52,7 @@ class GundamInterface:
         self.configJsonString: str | None = None
         self.fitterEngineConfig: Any | None = None
         self.engine: Any | None = None
+        self.parametersManager: GundamParametersManager | None = None
         self.parameters: list[GundamParameter] = []
 
     @property
@@ -133,6 +134,9 @@ class GundamInterface:
             self.configJsonString = configJsonString
             self.fitterEngineConfig = fitterEngineConfig
             self.engine = engine
+            self.parametersManager = GundamParametersManager(
+                _handle=engine.getLikelihoodInterface().getModelPropagator().getParametersManager()
+            )
 
     def _buildConfigBuilder(self, gundam):
         if self.runtime.configJsonString is not None:
@@ -223,32 +227,17 @@ class GundamInterface:
         gundam = self.importGundam()
         stateReader = GundamRootStateReader(self.runtime.absoluteOutputRootPath)
         stateConfigBuilder = stateReader.buildPostFitParameterStateConfig(gundam)
-        parametersManager = (
-            self.engine.getLikelihoodInterface()
-            .getModelPropagator()
-            .getParametersManager()
-        )
-        parametersManager.injectParameterValues(stateConfigBuilder.getConfig())
+        self._requireParametersManager()
+        self.parametersManager.injectParametersState(stateConfigBuilder.toString())
 
     def getParameterSetList(self):
-        self._requireConfigured()
-        parameterSets = (
-            self.engine.getLikelihoodInterface()
-            .getModelPropagator()
-            .getParametersManager()
-            .getParameterSetsList()
-        )
-        return wrapParameterSetList(parameterSets)
+        self._requireParametersManager()
+        return self.parametersManager.getParameterSetList()
 
     def refreshParameters(self) -> list[GundamParameter]:
-        self._requireConfigured()
-        parametersManager = (
-            self.engine.getLikelihoodInterface()
-            .getModelPropagator()
-            .getParametersManager()
-        )
+        self._requireParametersManager()
         parameters: list[GundamParameter] = []
-        for parameterSet in parametersManager.getParameterSetsList():
+        for parameterSet in self.parametersManager.getParameterSetList():
             for parameter in parameterSet.getParameterList():
                 if not parameter.isEnabled():
                     continue
@@ -374,6 +363,11 @@ class GundamInterface:
     def _requireConfigured(self) -> None:
         if self.engine is None:
             raise RuntimeError("GundamInterface.configure() must be called first")
+
+    def _requireParametersManager(self) -> None:
+        self._requireConfigured()
+        if self.parametersManager is None:
+            raise RuntimeError("GundamInterface parameters manager is not available")
 
     def _setLikelihoodDataType(self) -> None:
         self._requireConfigured()
