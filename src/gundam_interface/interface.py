@@ -11,7 +11,6 @@ import numpy as np
 
 from .parameters import (
     GundamParameter,
-    collectActiveParameters,
     wrapParameterSetList,
 )
 from .root_state import GundamRootStateReader
@@ -251,9 +250,21 @@ class GundamInterface:
             .getModelPropagator()
             .getParametersManager()
         )
-        self.parameters = collectActiveParameters(
-            parametersManager,
-        )
+        parameters: list[GundamParameter] = []
+        for parameterSet in parametersManager.getParameterSetsList():
+            for parameter in parameterSet.getParameterList():
+                if not parameter.isEnabled():
+                    continue
+
+                stepSize = float(parameter.getStepSize())
+                if not np.isfinite(stepSize) or stepSize <= 0:
+                    raise ValueError(
+                        f"Invalid step size for {parameter.getFullTitle()}: {stepSize}"
+                    )
+
+                parameters.append(GundamParameter(_handle=parameter))
+
+        self.parameters = parameters
         return self.parameters
 
     def getParameterValues(self) -> np.ndarray:

@@ -3,8 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-import numpy as np
-
 from .utils import GundamCovarianceMatrix
 
 
@@ -68,24 +66,3 @@ class GundamParameterSet:
 
 def wrapParameterSetList(parameterSets: Any) -> list[GundamParameterSet]:
     return [GundamParameterSet(_handle=parameterSet) for parameterSet in parameterSets]
-
-
-def collectActiveParameters(
-    parametersManager: Any,
-) -> list[GundamParameter]:
-    parameters: list[GundamParameter] = []
-    for parameterSet in parametersManager.getParameterSetsList():
-        for parameter in parameterSet.getParameterList():
-            if not parameter.isEnabled():
-                continue
-
-            stepSize = float(parameter.getStepSize())
-            if not np.isfinite(stepSize) or stepSize <= 0:
-                raise ValueError(
-                    f"Invalid step size for {parameter.getFullTitle()}: {stepSize}"
-                )
-
-            parameters.append(
-                GundamParameter(_handle=parameter)
-            )
-    return parameters

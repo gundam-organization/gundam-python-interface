@@ -11,7 +11,6 @@ from .logging import (
 )
 from .parameters import (
     GundamParameter,
-    collectActiveParameters,
 )
 from .runtime import GundamRuntime
 from .samples import GundamHistogram, GundamSample, GundamSamples
@@ -28,7 +27,6 @@ __all__ = [
     "GundamSample",
     "GundamSamples",
     "PostfitThrowSamples",
-    "collectActiveParameters",
     "isNotebookRuntime",
     "maybeRedirectNativeOutput",
     "redirectNativeOutput",
