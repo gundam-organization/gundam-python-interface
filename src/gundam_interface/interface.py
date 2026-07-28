@@ -64,18 +64,14 @@ class GundamInterface:
             if validatePaths:
                 self._runtime.validatePaths()
 
-            gundam = self._runtime.loader.importGundam()
-            gundam.setLightOutputMode(False)
-            gundam.setNumberOfThreads(self._runtime.nCpuThreads)
-            workingDirectory = Path(self._runtime.workDir).expanduser().resolve()
-            gundam.setRuntimeWorkingDirectory(str(workingDirectory))
+            gundam = self._runtime.getGundamModule()
+            workingDirectory = self._runtime.absoluteWorkDir
 
-            with temporaryWorkingDirectory(workingDirectory):
-                configReader = self._runtime.getConfigReader()
-                configReader.defineField(
-                    gundam.ConfigUtils.ConfigReader.FieldDefinition("fitterEngineConfig")
-                )
-                fitterEngineConfig = configReader.fetchValueConfigReader("fitterEngineConfig")
+            configReader = self._runtime.getConfigReader()
+            configReader.defineField(
+                gundam.ConfigUtils.ConfigReader.FieldDefinition("fitterEngineConfig")
+            )
+            fitterEngineConfig = configReader.fetchValueConfigReader("fitterEngineConfig")
 
             engine = gundam.FitterEngine()
             engine.setConfig(fitterEngineConfig)
@@ -223,7 +219,7 @@ class GundamInterface:
         if not self._runtime.loadPostFitState:
             return
 
-        gundam = self._runtime.loader.importGundam()
+        gundam = self._runtime.getGundamModule()
         stateReader = GundamRootStateReader(self._runtime.absoluteOutputRootPath)
         stateConfigBuilder = stateReader.buildPostFitParameterStateConfig(gundam)
         self._requireConfigured()
@@ -240,7 +236,7 @@ class GundamInterface:
 
     def _setLikelihoodDataType(self) -> None:
         self._requireConfigured()
-        gundam = self._runtime.loader.importGundam()
+        gundam = self._runtime.getGundamModule()
         likelihoodInterface = self.engine.getLikelihoodInterface()
         dataType = getattr(gundam.LikelihoodInterface.DataType, self._runtime.dataType)
         likelihoodInterface.setDataType(dataType)

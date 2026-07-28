@@ -86,6 +86,11 @@ class GundamRuntime:
         init=False,
         default_factory=GundamLogRedirector,
     )
+    _gundamModule: Any | None = field(
+        init=False,
+        default=None,
+        repr=False,
+    )
 
     def __post_init__(self) -> None:
         self.workDir = Path(self.workDir).expanduser()
@@ -218,9 +223,18 @@ class GundamRuntime:
             file.write("\n")
 
     def getConfigReader(self) -> Any:
-        gundam = self.loader.importGundam()
+        gundam = self.getGundamModule()
         configBuilder = self._buildConfigBuilder(gundam)
         return gundam.ConfigUtils.ConfigReader(configBuilder.getConfig())
+
+    def getGundamModule(self) -> Any:
+        if self._gundamModule is None:
+            gundam = self.loader.importGundam()
+            gundam.setLightOutputMode(False)
+            gundam.setNumberOfThreads(self.nCpuThreads)
+            gundam.setRuntimeWorkingDirectory(str(self.absoluteWorkDir))
+            self._gundamModule = gundam
+        return self._gundamModule
 
     @staticmethod
     def _canonicalDataType(dataType: str | None, forceAsimov: bool | None) -> str:
@@ -272,6 +286,10 @@ class GundamRuntime:
             else:
                 overridePaths.append(self.workDir / overridePath)
         return overridePaths
+
+    @property
+    def absoluteWorkDir(self) -> Path:
+        return self.workDir.expanduser().resolve()
 
     @property
     def defaultInitializeLogPath(self) -> Path:
