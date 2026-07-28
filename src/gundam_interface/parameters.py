@@ -75,11 +75,11 @@ class GundamParametersManager:
     def throwParameters(self) -> None:
         self._handle.throwParameters()
 
-    def exportParametersStateJson(self) -> Any:
+    def exportParametersStateJson(self) -> str:
         return json.loads(self._handle.exportParameterInjectorConfig().toString())
 
-    def injectParameterValues(self, config: Any) -> None:
-        self._handle.injectParameterValues(config)
+    def injectParametersState(self, jsonString_: str) -> None:
+        self._handle.injectParameterValues(jsonString_)
 
     def getParameterSetList(self) -> list[GundamParameterSet]:
         return [
