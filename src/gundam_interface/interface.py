@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import os
 import tempfile
-from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 import numpy as np
 
@@ -13,6 +11,7 @@ from .parameters import GundamParametersManager
 from .root_state import GundamRootStateReader
 from .runtime import GundamRuntime
 from .samples import GundamSamples
+from .utils import preservedWorkingDirectory, temporaryWorkingDirectory
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,25 +20,6 @@ class PostfitThrowSamples:
 
     physicalValues: np.ndarray
     llh: np.ndarray
-
-
-@contextmanager
-def preservedWorkingDirectory() -> Iterator[None]:
-    originalWorkingDirectory = Path.cwd()
-    try:
-        yield
-    finally:
-        os.chdir(originalWorkingDirectory)
-
-
-@contextmanager
-def temporaryWorkingDirectory(path: str | os.PathLike[str]) -> Iterator[None]:
-    originalWorkingDirectory = Path.cwd()
-    os.chdir(Path(path).expanduser().resolve())
-    try:
-        yield
-    finally:
-        os.chdir(originalWorkingDirectory)
 
 
 class GundamInterface:

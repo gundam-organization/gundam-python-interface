@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import os
+from contextlib import contextmanager
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
+from typing import Iterator
 
 import numpy as np
 
@@ -30,3 +34,22 @@ class GundamCovarianceMatrix:
             for col in range(out.shape[1]):
                 out[row, col] = self.getValue(row, col)
         return out
+
+
+@contextmanager
+def preservedWorkingDirectory() -> Iterator[None]:
+    originalWorkingDirectory = Path.cwd()
+    try:
+        yield
+    finally:
+        os.chdir(originalWorkingDirectory)
+
+
+@contextmanager
+def temporaryWorkingDirectory(path: str | os.PathLike[str]) -> Iterator[None]:
+    originalWorkingDirectory = Path.cwd()
+    os.chdir(Path(path).expanduser().resolve())
+    try:
+        yield
+    finally:
+        os.chdir(originalWorkingDirectory)
