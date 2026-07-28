@@ -1,24 +1,18 @@
 from __future__ import annotations
 
 import os
-import tempfile
-from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 import numpy as np
 
-from .parameters import (
-    GundamParameter,
-    collectActiveParameters,
-    parameterPriors,
-    parameterSteps,
-    parameterThrowValues,
-)
-from .root_state import GundamRootStateReader
+from .internal.minimizer import GundamMinimizer
+from .internal.parameters import GundamParametersManager
+from .internal.root_state import GundamRootStateReader
+from .internal.samples import GundamSamples
+from .internal.utils import preservedWorkingDirectory
 from .runtime import GundamRuntime
-from .samples import GundamSamples
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,60 +23,32 @@ class PostfitThrowSamples:
     llh: np.ndarray
 
 
-@contextmanager
-def preservedWorkingDirectory() -> Iterator[None]:
-    originalWorkingDirectory = Path.cwd()
-    try:
-        yield
-    finally:
-        os.chdir(originalWorkingDirectory)
-
-
-@contextmanager
-def temporaryWorkingDirectory(path: str | os.PathLike[str]) -> Iterator[None]:
-    originalWorkingDirectory = Path.cwd()
-    os.chdir(Path(path).expanduser().resolve())
-    try:
-        yield
-    finally:
-        os.chdir(originalWorkingDirectory)
-
-
 class GundamInterface:
     """Thin Python wrapper around the GUNDAM fitting interface."""
 
-    def __init__(self, runtime: GundamRuntime, gundam: Any | None = None):
-        self.runtime = runtime
-        self.gundam: Any | None = gundam
-        self.configBuilder: Any | None = None
-        self.configJsonString: str | None = None
-        self.fitterEngineConfig: Any | None = None
+    def __init__(self, runtime: GundamRuntime):
+        # Externals
+        self._runtime = runtime
+
+        # GUNDAM objects
         self.engine: Any | None = None
-        self.parameters: list[GundamParameter] = []
 
-    @property
-    def isConfigured(self) -> bool:
-        return self.engine is not None
+        # Interface views
+        self._parametersManager: GundamParametersManager | None = None
+        self._minimizer: GundamMinimizer | None = None
 
-    @property
-    def isInitialized(self) -> bool:
-        return bool(self.parameters)
+        # Internals
+        self._isConfigured = False
+        self._isInitialized = False
 
-    @property
-    def priors(self) -> np.ndarray:
-        return parameterPriors(self.parameters)
+    def getRuntime(self) -> GundamRuntime:
+        return self._runtime
 
-    @property
-    def stepSizes(self) -> np.ndarray:
-        return parameterSteps(self.parameters)
-
-    @property
-    def throwValues(self) -> np.ndarray | None:
-        return parameterThrowValues(self.parameters)
-
-    @property
-    def parameterNames(self) -> list[str]:
-        return [parameter.name for parameter in self.parameters]
+    def getMinimizer(self) -> GundamMinimizer:
+        self._requireConfigured()
+        if self._minimizer is None:
+            raise RuntimeError("GUNDAM minimizer is not available")
+        return self._minimizer
 
     @property
     def modelSamples(self) -> GundamSamples:
@@ -96,82 +62,26 @@ class GundamInterface:
         propagator = self.engine.getLikelihoodInterface().getDataPropagator()
         return GundamSamples(propagator=propagator)
 
-    @property
-    def minimizerFitParameters(self):
-        self._requireConfigured()
-        return self.engine.getMinimizer().getMinimizerFitParameterPtr()
-
-    def importGundam(self):
-        if self.gundam is None:
-            self.gundam = self.runtime.loader.importGundam()
-        return self.gundam
-
     def configure(self, validatePaths: bool = True) -> None:
         with preservedWorkingDirectory():
             if validatePaths:
-                self.runtime.validatePaths()
+                self._runtime.validatePaths()
 
-            gundam = self.importGundam()
-            gundam.setLightOutputMode(False)
-            gundam.setNumberOfThreads(self.runtime.nCpuThreads)
-            workingDirectory = Path(self.runtime.workDir).expanduser().resolve()
-            gundam.setRuntimeWorkingDirectory(str(workingDirectory))
-
-            with temporaryWorkingDirectory(workingDirectory):
-                configBuilder = self._buildConfigBuilder(gundam)
-                configJsonString = configBuilder.toString()
-
-                configReader = gundam.ConfigUtils.ConfigReader(configBuilder.getConfig())
-                configReader.defineField(
-                    gundam.ConfigUtils.ConfigReader.FieldDefinition("fitterEngineConfig")
-                )
-                fitterEngineConfig = configReader.fetchValueConfigReader("fitterEngineConfig")
+            gundam = self._runtime.getGundamModule()
+            fitterEngineConfig = self._runtime.getFitterEngineConfig()
 
             engine = gundam.FitterEngine()
             engine.setConfig(fitterEngineConfig)
-            self._setEngineRandomSeed(engine, self.runtime.randomSeed)
-            with temporaryWorkingDirectory(workingDirectory):
+            with self._runtime.runFromWorkingDirectory():
                 engine.configure()
 
-            self.configBuilder = configBuilder
-            self.configJsonString = configJsonString
-            self.fitterEngineConfig = fitterEngineConfig
             self.engine = engine
-
-    def _buildConfigBuilder(self, gundam):
-        if self.runtime.configJsonString is not None:
-            configBuilder = self._buildConfigBuilderFromJsonString(
-                gundam,
-                self.runtime.configJsonString,
+            self._parametersManager = GundamParametersManager(
+                _handle=engine.getLikelihoodInterface().getModelPropagator().getParametersManager()
             )
-        elif self.runtime.configPath is not None:
-            configPath = Path(self.runtime.absoluteConfigPath).expanduser().resolve()
-            configBuilder = gundam.ConfigUtils.ConfigBuilder(str(configPath))
-        else:
-            outputRootPath = Path(self.runtime.absoluteOutputRootPath).expanduser().resolve()
-            configBuilder = gundam.ConfigUtils.ConfigBuilder(str(outputRootPath))
-
-        overridePaths = [
-            Path(overridePath).expanduser().resolve()
-            for overridePath in self.runtime.absoluteOverridePaths
-        ]
-        for overridePath in overridePaths:
-            configBuilder.override(str(overridePath))
-        return configBuilder
-
-    @staticmethod
-    def _buildConfigBuilderFromJsonString(gundam, configJsonString: str):
-        # The Python binding exposes ConfigBuilder(str), but that overload expects a file path.
-        # Keep the public API string-based and isolate the temporary bridge here.
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            suffix=".json",
-            encoding="utf-8",
-            delete=True,
-        ) as configFile:
-            configFile.write(configJsonString)
-            configFile.flush()
-            return gundam.ConfigUtils.ConfigBuilder(str(configFile.name))
+            self._minimizer = GundamMinimizer(_handle=engine.getMinimizer())
+            self._isConfigured = True
+            self._isInitialized = False
 
     def initialize(
         self,
@@ -179,29 +89,93 @@ class GundamInterface:
     ) -> None:
         with preservedWorkingDirectory():
             self._requireConfigured()
-            workingDirectory = Path(self.runtime.workDir).expanduser().resolve()
-
             if logPath is not None:
                 logPath = Path(logPath).expanduser().resolve()
-            redirectContext = self.runtime.logRedirector.redirect(
+            redirectContext = self._runtime.logRedirector.redirect(
                 logPath,
                 prefix="gundam_initialize",
             )
 
-            with temporaryWorkingDirectory(workingDirectory):
+            with self._runtime.runFromWorkingDirectory():
                 self._setLikelihoodDataType()
                 with redirectContext:
                     self.engine.initialize()
                 self._loadDataHistogramsIfAvailable()
                 self._loadPostFitStateIfRequested()
+            self._isInitialized = True
 
-            self.refreshParameters()
+    def getParametersManager(self) -> GundamParametersManager | None:
+        self._requireConfigured()
+        return self._parametersManager
+
+    def evaluateLlh(
+        self,
+        physicalValues: np.ndarray | None = None,
+        logPath: str | os.PathLike[str] | None = None,
+    ) -> float:
+        with preservedWorkingDirectory():
+            self._requireInitialized()
+            if physicalValues is not None:
+                self._parametersManager.setParameterValues(physicalValues)
+
+            with self._runtime.runFromWorkingDirectory():
+                self.engine.getLikelihoodInterface().propagateAndEvalLikelihood()
+                return float(self.engine.getLikelihoodInterface().getLastLikelihood())
+
+    def evaluatePostfitThrows(
+        self,
+        nThrows: int,
+        logPath: str | os.PathLike[str] | None = None,
+        showProgress: bool = True,
+    ) -> PostfitThrowSamples:
+        """Throw post-fit parameters, propagate them, and evaluate their LLH.
+
+        The GUNDAM binding only exposes ``throwPostfitParameters()`` as a state
+        update on the minimizer. This method wraps that operation into a simple
+        batch interface. ``logPath`` is accepted for backward compatibility but
+        is intentionally ignored: native output is not redirected in this loop.
+        """
+        from tqdm.auto import tqdm
+
+        del logPath
+        with preservedWorkingDirectory():
+            self._requireInitialized()
+            if nThrows < 1:
+                raise ValueError("nThrows must be >= 1")
+            parametersManager = self.getParametersManager()
+            if parametersManager is None:
+                raise RuntimeError("GUNDAM parameters manager is not available")
+            physicalValues = np.empty(
+                (nThrows, parametersManager.getParameterValues().shape[0]),
+                dtype=np.float64,
+            )
+            llh = np.empty(nThrows, dtype=np.float64)
+
+            with self._runtime.runFromWorkingDirectory():
+                likelihoodInterface = self.engine.getLikelihoodInterface()
+                throwIterator = range(nThrows)
+                if showProgress:
+                    throwIterator = tqdm(
+                        throwIterator,
+                        desc="GUNDAM post-fit throws",
+                        unit="throw",
+                    )
+                for throwIndex in throwIterator:
+                    self.minimizer.throwPostfitParameters()
+                    physicalValues[throwIndex] = parametersManager.getParameterValues()
+                    likelihoodInterface.propagateAndEvalLikelihood()
+                    llh[throwIndex] = float(likelihoodInterface.getLastLikelihood())
+
+            return PostfitThrowSamples(
+                physicalValues=physicalValues,
+                llh=llh,
+            )
 
     def _loadDataHistogramsIfAvailable(self) -> None:
-        if self.runtime.outputRootPath is None or not self.runtime.loadDataHistograms:
+        if self._runtime.outputRootPath is None or not self._runtime.loadDataHistograms:
             return
 
-        stateReader = GundamRootStateReader(self.runtime.absoluteOutputRootPath)
+        stateReader = GundamRootStateReader(self._runtime.absoluteOutputRootPath)
         for sample in self.dataSamples:
             sampleName = str(sample.handle.getName())
             histogramState = stateReader.readDataHistogram(sampleName)
@@ -221,153 +195,26 @@ class GundamInterface:
                 binContent.sqrtSumSqWeights = float(sqrtSumSqWeight)
 
     def _loadPostFitStateIfRequested(self) -> None:
-        if not self.runtime.loadPostFitState:
+        if not self._runtime.loadPostFitState:
             return
 
-        gundam = self.importGundam()
-        stateReader = GundamRootStateReader(self.runtime.absoluteOutputRootPath)
+        gundam = self._runtime.getGundamModule()
+        stateReader = GundamRootStateReader(self._runtime.absoluteOutputRootPath)
         stateConfigBuilder = stateReader.buildPostFitParameterStateConfig(gundam)
-        parametersManager = (
-            self.engine.getLikelihoodInterface()
-            .getModelPropagator()
-            .getParametersManager()
-        )
-        parametersManager.injectParameterValues(stateConfigBuilder.getConfig())
-
-    def refreshParameters(self) -> list[GundamParameter]:
         self._requireConfigured()
-        parametersManager = (
-            self.engine.getLikelihoodInterface()
-            .getModelPropagator()
-            .getParametersManager()
-        )
-        self.parameters = collectActiveParameters(
-            parametersManager,
-            includeThrowValues=self.runtime.dataType == "Toy",
-        )
-        return self.parameters
+        self._parametersManager.injectParametersState(stateConfigBuilder.toString())
 
-    def getParameterValues(self) -> np.ndarray:
-        self._requireParameters()
-        return np.array([parameter.value for parameter in self.parameters], dtype=np.float64)
-
-    def setParameterValues(self, values: np.ndarray) -> None:
-        self._requireParameters()
-        values = np.asarray(values, dtype=np.float64)
-        if values.shape != self.priors.shape:
-            raise ValueError(f"Expected parameter shape {self.priors.shape}, got {values.shape}")
-        for parameter, value in zip(self.parameters, values):
-            parameter.setValue(float(value))
-
-    def resetToPrior(self) -> None:
-        self._requireParameters()
-        for parameter in self.parameters:
-            parameter.resetToPrior()
-
-    def evaluateLlh(
-        self,
-        physicalValues: np.ndarray | None = None,
-        logPath: str | os.PathLike[str] | None = None,
-    ) -> float:
-        with preservedWorkingDirectory():
-            self._requireParameters()
-            if physicalValues is not None:
-                self.setParameterValues(physicalValues)
-
-            workingDirectory = Path(self.runtime.workDir).expanduser().resolve()
-
-            with temporaryWorkingDirectory(workingDirectory):
-                self.engine.getLikelihoodInterface().propagateAndEvalLikelihood()
-                return float(self.engine.getLikelihoodInterface().getLastLikelihood())
-
-    def minimize(
-        self,
-        logPath: str | os.PathLike[str] | None = None,
-    ) -> float:
-        with preservedWorkingDirectory():
-            self._requireParameters()
-            workingDirectory = Path(self.runtime.workDir).expanduser().resolve()
-
-            with temporaryWorkingDirectory(workingDirectory):
-                self.engine.getMinimizer().minimize()
-
-            self.refreshParameters()
-            return float(self.engine.getLikelihoodInterface().getLastLikelihood())
-
-    def evaluatePostfitThrows(
-        self,
-        nThrows: int,
-        logPath: str | os.PathLike[str] | None = None,
-        showProgress: bool = True,
-    ) -> PostfitThrowSamples:
-        """Throw post-fit parameters, propagate them, and evaluate their LLH.
-
-        The GUNDAM binding only exposes ``throwPostfitParameters()`` as a state
-        update on the minimizer. This method wraps that operation into a simple
-        batch interface. ``logPath`` is accepted for backward compatibility but
-        is intentionally ignored: native output is not redirected in this loop.
-        """
-        from tqdm.auto import tqdm
-
-        with preservedWorkingDirectory():
-            self._requireParameters()
-            if nThrows < 1:
-                raise ValueError("nThrows must be >= 1")
-            workingDirectory = Path(self.runtime.workDir).expanduser().resolve()
-
-            physicalValues = np.empty((nThrows, self.priors.shape[0]), dtype=np.float64)
-            llh = np.empty(nThrows, dtype=np.float64)
-
-            with temporaryWorkingDirectory(workingDirectory):
-                minimizer = self.engine.getMinimizer()
-                likelihoodInterface = self.engine.getLikelihoodInterface()
-                throwIterator = range(nThrows)
-                if showProgress:
-                    throwIterator = tqdm(
-                        throwIterator,
-                        desc="GUNDAM post-fit throws",
-                        unit="throw",
-                    )
-                for throwIndex in throwIterator:
-                    minimizer.throwPostfitParameters()
-                    physicalValues[throwIndex] = self.getParameterValues()
-                    likelihoodInterface.propagateAndEvalLikelihood()
-                    llh[throwIndex] = float(likelihoodInterface.getLastLikelihood())
-
-            self.refreshParameters()
-            return PostfitThrowSamples(
-                physicalValues=physicalValues,
-                llh=llh,
-            )
-
-    def setSeed(self, seed: int | None = None) -> None:
+    def _setLikelihoodDataType(self) -> None:
         self._requireConfigured()
-        seed = self.runtime.randomSeed if seed is None else seed
-        self._setEngineRandomSeed(self.engine, seed)
-
-    @staticmethod
-    def _setEngineRandomSeed(engine, seed: int | None) -> None:
-        if seed is None:
-            return
-        seed = int(seed)
-        if seed < 0:
-            raise ValueError("seed must be >= 0")
-        type(engine).setRandomSeed(seed)
+        gundam = self._runtime.getGundamModule()
+        likelihoodInterface = self.engine.getLikelihoodInterface()
+        dataType = getattr(gundam.LikelihoodInterface.DataType, self._runtime.dataType)
+        likelihoodInterface.setDataType(dataType)
 
     def _requireConfigured(self) -> None:
         if self.engine is None:
             raise RuntimeError("GundamInterface.configure() must be called first")
 
-    def _setLikelihoodDataType(self) -> None:
-        self._requireConfigured()
-        gundam = self.importGundam()
-        likelihoodInterface = self.engine.getLikelihoodInterface()
-        dataType = getattr(gundam.LikelihoodInterface.DataType, self.runtime.dataType)
-        likelihoodInterface.setDataType(dataType)
-
-    def _requireParameters(self) -> None:
-        self._requireConfigured()
-        if not self.parameters:
-            raise RuntimeError(
-                "No active parameters are loaded. Call initialize() or refreshParameters() first."
-            )
+    def _requireInitialized(self) -> None:
+        if not self._isInitialized:
+            raise RuntimeError("GundamInterface.initialize() must be called first")

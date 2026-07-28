@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
+from .internal.logging import GundamLogRedirector
 from .loader import GundamLoader
-from .logging import GundamLogRedirector
 
 
 @dataclass(slots=True)
@@ -84,6 +87,11 @@ class GundamRuntime:
     logRedirector: GundamLogRedirector = field(
         init=False,
         default_factory=GundamLogRedirector,
+    )
+    _gundamModule: Any | None = field(
+        init=False,
+        default=None,
+        repr=False,
     )
 
     def __post_init__(self) -> None:
@@ -216,6 +224,42 @@ class GundamRuntime:
             json.dump(self.toDict(), file, indent=2, sort_keys=True)
             file.write("\n")
 
+    def getConfigReader(self) -> Any:
+        gundam = self.getGundamModule()
+        configBuilder = self._buildConfigBuilder(gundam)
+        return gundam.ConfigUtils.ConfigReader(configBuilder.getConfig())
+
+    def getFitterEngineConfig(self) -> Any:
+        gundam = self.getGundamModule()
+        configReader = self.getConfigReader()
+        configReader.defineField(
+            gundam.ConfigUtils.ConfigReader.FieldDefinition("fitterEngineConfig")
+        )
+        return configReader.fetchValueConfigReader("fitterEngineConfig")
+
+    def getGundamModule(self) -> Any:
+        if self._gundamModule is None:
+            gundam = self.loader.importGundam()
+            gundam.setLightOutputMode(False)
+            gundam.setNumberOfThreads(self.nCpuThreads)
+            gundam.setRuntimeWorkingDirectory(str(self.absoluteWorkDir))
+
+            if self.randomSeed is not None:
+                print(self.randomSeed)
+                gundam.FitterEngine().setRandomSeed(int(self.randomSeed))
+
+            self._gundamModule = gundam
+        return self._gundamModule
+
+    @contextmanager
+    def runFromWorkingDirectory(self) -> Iterator[None]:
+        originalWorkingDirectory = Path.cwd()
+        os.chdir(self.absoluteWorkDir)
+        try:
+            yield
+        finally:
+            os.chdir(originalWorkingDirectory)
+
     @staticmethod
     def _canonicalDataType(dataType: str | None, forceAsimov: bool | None) -> str:
         if dataType is None:
@@ -268,6 +312,10 @@ class GundamRuntime:
         return overridePaths
 
     @property
+    def absoluteWorkDir(self) -> Path:
+        return self.workDir.expanduser().resolve()
+
+    @property
     def defaultInitializeLogPath(self) -> Path:
         """Default log path for GUNDAM initialization output."""
         return self.workDir / "gundam_initialize.log"
@@ -290,3 +338,30 @@ class GundamRuntime:
         for overridePath in self.absoluteOverridePaths:
             if not overridePath.exists():
                 raise FileNotFoundError(f"GUNDAM override file does not exist: {overridePath}")
+
+    def _buildConfigBuilder(self, gundam: Any) -> Any:
+        if self.configJsonString is not None:
+            configBuilder = self._buildConfigBuilderFromJsonString(
+                gundam,
+                self.configJsonString,
+            )
+        elif self.configPath is not None:
+            configBuilder = gundam.ConfigUtils.ConfigBuilder(str(self.absoluteConfigPath))
+        else:
+            configBuilder = gundam.ConfigUtils.ConfigBuilder(str(self.absoluteOutputRootPath))
+
+        for overridePath in self.absoluteOverridePaths:
+            configBuilder.override(str(overridePath))
+        return configBuilder
+
+    @staticmethod
+    def _buildConfigBuilderFromJsonString(gundam: Any, configJsonString: str) -> Any:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".json",
+            encoding="utf-8",
+            delete=True,
+        ) as configFile:
+            configFile.write(configJsonString)
+            configFile.flush()
+            return gundam.ConfigUtils.ConfigBuilder(str(configFile.name))
