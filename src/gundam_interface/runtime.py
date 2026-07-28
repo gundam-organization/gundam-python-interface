@@ -5,10 +5,11 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from .internal.logging import GundamLogRedirector
 from .loader import GundamLoader
@@ -147,7 +148,7 @@ class GundamRuntime:
             )
 
     @classmethod
-    def fromDict(cls, data: dict[str, Any]) -> "GundamRuntime":
+    def fromDict(cls, data: dict[str, Any]) -> GundamRuntime:
         """Create a runtime from a JSON-compatible dictionary.
 
         The preferred loader schema is ``{"loader": {"gundamLibPath": ...}}``.
@@ -179,7 +180,7 @@ class GundamRuntime:
         )
 
     @classmethod
-    def fromJsonFile(cls, path: str | Path) -> "GundamRuntime":
+    def fromJsonFile(cls, path: str | Path) -> GundamRuntime:
         """Load a runtime definition from a JSON file."""
         with Path(path).open("r", encoding="utf-8") as file:
             return cls.fromDict(json.load(file))
