@@ -227,6 +227,14 @@ class GundamRuntime:
         configBuilder = self._buildConfigBuilder(gundam)
         return gundam.ConfigUtils.ConfigReader(configBuilder.getConfig())
 
+    def getFitterEngineConfig(self) -> Any:
+        gundam = self.getGundamModule()
+        configReader = self.getConfigReader()
+        configReader.defineField(
+            gundam.ConfigUtils.ConfigReader.FieldDefinition("fitterEngineConfig")
+        )
+        return configReader.fetchValueConfigReader("fitterEngineConfig")
+
     def getGundamModule(self) -> Any:
         if self._gundamModule is None:
             gundam = self.loader.importGundam()

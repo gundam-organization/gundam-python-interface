@@ -65,18 +65,12 @@ class GundamInterface:
                 self._runtime.validatePaths()
 
             gundam = self._runtime.getGundamModule()
-            workingDirectory = self._runtime.absoluteWorkDir
-
-            configReader = self._runtime.getConfigReader()
-            configReader.defineField(
-                gundam.ConfigUtils.ConfigReader.FieldDefinition("fitterEngineConfig")
-            )
-            fitterEngineConfig = configReader.fetchValueConfigReader("fitterEngineConfig")
+            fitterEngineConfig = self._runtime.getFitterEngineConfig()
 
             engine = gundam.FitterEngine()
             engine.setConfig(fitterEngineConfig)
             self._setEngineRandomSeed(engine, self._runtime.randomSeed)
-            with temporaryWorkingDirectory(workingDirectory):
+            with temporaryWorkingDirectory(self._runtime.absoluteWorkDir):
                 engine.configure()
 
             self.engine = engine
