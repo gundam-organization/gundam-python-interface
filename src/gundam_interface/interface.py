@@ -11,7 +11,7 @@ from .parameters import GundamParametersManager
 from .root_state import GundamRootStateReader
 from .runtime import GundamRuntime
 from .samples import GundamSamples
-from .utils import preservedWorkingDirectory, temporaryWorkingDirectory
+from .utils import preservedWorkingDirectory
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,7 +70,7 @@ class GundamInterface:
             engine = gundam.FitterEngine()
             engine.setConfig(fitterEngineConfig)
             self._setEngineRandomSeed(engine, self._runtime.randomSeed)
-            with temporaryWorkingDirectory(self._runtime.absoluteWorkDir):
+            with self._runtime.runFromWorkingDirectory():
                 engine.configure()
 
             self.engine = engine
@@ -86,8 +86,6 @@ class GundamInterface:
     ) -> None:
         with preservedWorkingDirectory():
             self._requireConfigured()
-            workingDirectory = Path(self._runtime.workDir).expanduser().resolve()
-
             if logPath is not None:
                 logPath = Path(logPath).expanduser().resolve()
             redirectContext = self._runtime.logRedirector.redirect(
@@ -95,7 +93,7 @@ class GundamInterface:
                 prefix="gundam_initialize",
             )
 
-            with temporaryWorkingDirectory(workingDirectory):
+            with self._runtime.runFromWorkingDirectory():
                 self._setLikelihoodDataType()
                 with redirectContext:
                     self.engine.initialize()
@@ -117,9 +115,7 @@ class GundamInterface:
             if physicalValues is not None:
                 self._parametersManager.setParameterValues(physicalValues)
 
-            workingDirectory = Path(self._runtime.workDir).expanduser().resolve()
-
-            with temporaryWorkingDirectory(workingDirectory):
+            with self._runtime.runFromWorkingDirectory():
                 self.engine.getLikelihoodInterface().propagateAndEvalLikelihood()
                 return float(self.engine.getLikelihoodInterface().getLastLikelihood())
 
@@ -129,9 +125,7 @@ class GundamInterface:
     ) -> float:
         with preservedWorkingDirectory():
             self._requireInitialized()
-            workingDirectory = Path(self._runtime.workDir).expanduser().resolve()
-
-            with temporaryWorkingDirectory(workingDirectory):
+            with self._runtime.runFromWorkingDirectory():
                 self.engine.getMinimizer().minimize()
 
             return float(self.engine.getLikelihoodInterface().getLastLikelihood())
@@ -155,12 +149,10 @@ class GundamInterface:
             self._requireInitialized()
             if nThrows < 1:
                 raise ValueError("nThrows must be >= 1")
-            workingDirectory = Path(self._runtime.workDir).expanduser().resolve()
-
             physicalValues = np.empty((nThrows, self.priors.shape[0]), dtype=np.float64)
             llh = np.empty(nThrows, dtype=np.float64)
 
-            with temporaryWorkingDirectory(workingDirectory):
+            with self._runtime.runFromWorkingDirectory():
                 minimizer = self.engine.getMinimizer()
                 likelihoodInterface = self.engine.getLikelihoodInterface()
                 throwIterator = range(nThrows)

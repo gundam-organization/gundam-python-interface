@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from .loader import GundamLoader
 from .logging import GundamLogRedirector
@@ -243,6 +245,15 @@ class GundamRuntime:
             gundam.setRuntimeWorkingDirectory(str(self.absoluteWorkDir))
             self._gundamModule = gundam
         return self._gundamModule
+
+    @contextmanager
+    def runFromWorkingDirectory(self) -> Iterator[None]:
+        originalWorkingDirectory = Path.cwd()
+        os.chdir(self.absoluteWorkDir)
+        try:
+            yield
+        finally:
+            os.chdir(originalWorkingDirectory)
 
     @staticmethod
     def _canonicalDataType(dataType: str | None, forceAsimov: bool | None) -> str:

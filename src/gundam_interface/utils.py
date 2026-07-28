@@ -43,13 +43,3 @@ def preservedWorkingDirectory() -> Iterator[None]:
         yield
     finally:
         os.chdir(originalWorkingDirectory)
-
-
-@contextmanager
-def temporaryWorkingDirectory(path: str | os.PathLike[str]) -> Iterator[None]:
-    originalWorkingDirectory = Path.cwd()
-    os.chdir(Path(path).expanduser().resolve())
-    try:
-        yield
-    finally:
-        os.chdir(originalWorkingDirectory)
