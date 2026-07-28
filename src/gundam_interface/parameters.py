@@ -91,7 +91,8 @@ class GundamParametersManager:
     def getActiveParameterList(self) -> list[GundamParameter]:
         out: list[GundamParameter] = []
         for parameterSet in self.getParameterSetList():
-            for parameter in parameterSet.getParameterList():
+            parList = parameterSet.getParameterList() if not parameterSet.isEnableEigenDecomp() else parameterSet.getEigenParameterList()
+            for parameter in parList:
                 if parameter.isEnabled():
                     out.append(parameter)
         return out
