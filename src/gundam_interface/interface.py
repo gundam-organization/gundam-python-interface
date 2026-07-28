@@ -7,12 +7,12 @@ from typing import Any
 
 import numpy as np
 
-from .minimizer import GundamMinimizer
-from .parameters import GundamParametersManager
-from .root_state import GundamRootStateReader
+from .internal.minimizer import GundamMinimizer
+from .internal.parameters import GundamParametersManager
+from .internal.root_state import GundamRootStateReader
+from .internal.samples import GundamSamples
+from .internal.utils import preservedWorkingDirectory
 from .runtime import GundamRuntime
-from .samples import GundamSamples
-from .utils import preservedWorkingDirectory
 
 
 @dataclass(frozen=True, slots=True)

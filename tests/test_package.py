@@ -6,11 +6,13 @@ import sys
 import pytest
 
 import gundam_interface
-from gundam_interface.logging import GundamLogRedirector
+from gundam_interface.internal.logging import GundamLogRedirector
+from gundam_interface.internal.minimizer import GundamMinimizer
+from gundam_interface.internal.samples import GundamHistogram, GundamSamples
 
 
 def test_gundam_log_redirector_does_not_redirect_regular_python(monkeypatch) -> None:
-    monkeypatch.setattr(gundam_interface.logging, "isNotebookRuntime", lambda: False)
+    monkeypatch.setattr("gundam_interface.internal.logging.isNotebookRuntime", lambda: False)
     redirector = GundamLogRedirector()
 
     with redirector.redirect() as value:
@@ -25,11 +27,11 @@ def test_package_exposes_public_api() -> None:
     assert gundam_interface.GundamRuntime.__name__ == "GundamRuntime"
     assert gundam_interface.GundamInterface.__name__ == "GundamInterface"
     assert gundam_interface.GundamLoader.__name__ == "GundamLoader"
-    assert gundam_interface.GundamMinimizer.__name__ == "GundamMinimizer"
-    assert gundam_interface.GundamParameter.__name__ == "GundamParameter"
-    assert gundam_interface.GundamHistogram.__name__ == "GundamHistogram"
-    assert gundam_interface.GundamSample.__name__ == "GundamSample"
-    assert gundam_interface.GundamSamples.__name__ == "GundamSamples"
+    assert not hasattr(gundam_interface, "GundamMinimizer")
+    assert not hasattr(gundam_interface, "GundamParameter")
+    assert not hasattr(gundam_interface, "GundamHistogram")
+    assert not hasattr(gundam_interface, "GundamSample")
+    assert not hasattr(gundam_interface, "GundamSamples")
 
 
 def test_gundam_runtime_defaults_to_one_cpu_thread(tmp_path) -> None:
@@ -217,7 +219,7 @@ def test_minimize_does_not_redirect_with_log_path(tmp_path) -> None:
 
 
 def test_gundam_samples_exposes_histogram_sum_weights() -> None:
-    samples = gundam_interface.GundamSamples(
+    samples = GundamSamples(
         propagator=FakePropagator(
             [FakeSample([1.0, 2.5, 3.0]), FakeSample([4.0, 5.0])]
         ),
@@ -234,7 +236,7 @@ def test_gundam_samples_exposes_histogram_sum_weights() -> None:
 
 
 def test_gundam_histogram_exposes_2d_layout_helpers() -> None:
-    histogram = gundam_interface.GundamHistogram(
+    histogram = GundamHistogram(
         handle=FakeHistogram(
             [10.0, 20.0],
             binContexts=[
@@ -324,7 +326,7 @@ def test_gundam_histogram_exposes_2d_layout_helpers() -> None:
 
 
 def test_gundam_histogram_projects_3d_layout_to_2d() -> None:
-    histogram = gundam_interface.GundamHistogram(
+    histogram = GundamHistogram(
         handle=FakeHistogram(
             [10.0, 20.0, 30.0, 40.0],
             binContexts=[
@@ -441,7 +443,7 @@ def test_gundam_interface_exposes_minimizer_fit_parameters(tmp_path) -> None:
         ),
     )
     interface.engine = FakeEngineWithMinimizer(FakeMinimizer(fitParameters))
-    interface._minimizer = gundam_interface.GundamMinimizer(_handle=interface.engine.getMinimizer())
+    interface._minimizer = GundamMinimizer(_handle=interface.engine.getMinimizer())
 
     assert interface.minimizerFitParameters is fitParameters
     assert interface.minimizer.fitParameters is fitParameters

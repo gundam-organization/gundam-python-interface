@@ -10,8 +10,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterator
 
+from .internal.logging import GundamLogRedirector
 from .loader import GundamLoader
-from .logging import GundamLogRedirector
 
 
 @dataclass(slots=True)
