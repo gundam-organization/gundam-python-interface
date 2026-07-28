@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from .parameters import GundamParameter
+
 
 @dataclass(slots=True)
 class GundamMinimizer:
@@ -10,8 +12,8 @@ class GundamMinimizer:
 
     _handle: Any
 
-    def getFitParameters(self) -> Any:
-        return self._handle.getMinimizerFitParameterPtr()
+    def getFitParameters(self) -> list[GundamParameter]:
+        return [GundamParameter(fitPar) for fitPar in self._handle.getMinimizerFitParameterPtr()]
 
     def minimize(self) -> None:
         self._handle.minimize()
