@@ -268,7 +268,7 @@ class GundamInterface:
     def resetToPrior(self) -> None:
         self._requireParameters()
         for parameter in self.parameters:
-            parameter.setValue(parameter.getPriorValue())
+            parameter.setValue(parameter.getPrior())
 
     def evaluateLlh(
         self,

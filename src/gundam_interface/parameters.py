@@ -24,10 +24,10 @@ class GundamParameter:
     def getStepSize(self) -> float:
         return float(self._handle.getStepSize())
 
-    def getPriorValue(self) -> float:
+    def getPrior(self) -> float:
         return float(self._handle.getPriorValue())
 
-    def getThrowValue(self) -> float:
+    def getThrow(self) -> float:
         return float(self._handle.getThrowValue())
 
     def getValue(self) -> float:
@@ -102,7 +102,7 @@ def collectActiveParameters(
 
 
 def parameterPriors(parameters: list[GundamParameter]) -> np.ndarray:
-    return np.array([parameter.getPriorValue() for parameter in parameters], dtype=np.float64)
+    return np.array([parameter.getPrior() for parameter in parameters], dtype=np.float64)
 
 
 def parameterSteps(parameters: list[GundamParameter]) -> np.ndarray:
@@ -116,4 +116,4 @@ def parameterThrowValues(
 ) -> np.ndarray | None:
     if not includeThrowValues:
         return None
-    return np.array([parameter.getThrowValue() for parameter in parameters], dtype=np.float64)
+    return np.array([parameter.getThrow() for parameter in parameters], dtype=np.float64)
