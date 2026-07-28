@@ -12,9 +12,6 @@ import numpy as np
 from .parameters import (
     GundamParameter,
     collectActiveParameters,
-    parameterPriors,
-    parameterSteps,
-    parameterThrowValues,
     wrapParameterSetList,
 )
 from .root_state import GundamRootStateReader
@@ -71,18 +68,17 @@ class GundamInterface:
 
     @property
     def priors(self) -> np.ndarray:
-        return parameterPriors(self.parameters)
+        return np.array([parameter.getPrior() for parameter in self.parameters], dtype=np.float64)
 
     @property
     def stepSizes(self) -> np.ndarray:
-        return parameterSteps(self.parameters)
+        return np.array([parameter.getStepSize() for parameter in self.parameters], dtype=np.float64)
 
     @property
     def throwValues(self) -> np.ndarray | None:
-        return parameterThrowValues(
-            self.parameters,
-            includeThrowValues=self.runtime.dataType == "Toy",
-        )
+        if self.runtime.dataType != "Toy":
+            return None
+        return np.array([parameter.getThrow() for parameter in self.parameters], dtype=np.float64)
 
     @property
     def parameterNames(self) -> list[str]:

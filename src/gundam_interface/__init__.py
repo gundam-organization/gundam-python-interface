@@ -12,9 +12,6 @@ from .logging import (
 from .parameters import (
     GundamParameter,
     collectActiveParameters,
-    parameterPriors,
-    parameterSteps,
-    parameterThrowValues,
 )
 from .runtime import GundamRuntime
 from .samples import GundamHistogram, GundamSample, GundamSamples
@@ -34,9 +31,6 @@ __all__ = [
     "collectActiveParameters",
     "isNotebookRuntime",
     "maybeRedirectNativeOutput",
-    "parameterPriors",
-    "parameterSteps",
-    "parameterThrowValues",
     "redirectNativeOutput",
     "temporaryRedirectNativeOutput",
 ]

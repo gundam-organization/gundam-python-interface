@@ -89,21 +89,3 @@ def collectActiveParameters(
                 GundamParameter(_handle=parameter)
             )
     return parameters
-
-
-def parameterPriors(parameters: list[GundamParameter]) -> np.ndarray:
-    return np.array([parameter.getPrior() for parameter in parameters], dtype=np.float64)
-
-
-def parameterSteps(parameters: list[GundamParameter]) -> np.ndarray:
-    return np.array([parameter.getStepSize() for parameter in parameters], dtype=np.float64)
-
-
-def parameterThrowValues(
-    parameters: list[GundamParameter],
-    *,
-    includeThrowValues: bool = False,
-) -> np.ndarray | None:
-    if not includeThrowValues:
-        return None
-    return np.array([parameter.getThrow() for parameter in parameters], dtype=np.float64)
