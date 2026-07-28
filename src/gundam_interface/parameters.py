@@ -43,37 +43,25 @@ class GundamParameterSet:
 
     _handle: Any
 
-    @property
     def isEnableEigenDecomp(self) -> bool:
         return bool(self._handle.isEnableEigenDecomp())
 
-    @property
-    def parameters(self) -> list[GundamParameter]:
-        parameters: list[GundamParameter] = []
+    def getParameterList(self) -> list[GundamParameter]:
+        out: list[GundamParameter] = []
         for parameter in self._handle.getParameterList():
-            parameters.append(GundamParameter(_handle=parameter))
-        return parameters
+            out.append(GundamParameter(_handle=parameter))
+        return out
 
-    @property
-    def eigenParameters(self) -> list[GundamParameter]:
-        parameters: list[GundamParameter] = []
+    def getEigenParameterList(self) -> list[GundamParameter]:
+        if not self._handle.isEnableEigenDecomp():
+            return []
+        out: list[GundamParameter] = []
         for parameter in self._handle.getEigenParameterList():
-            parameters.append(GundamParameter(_handle=parameter))
-        return parameters
+            out.append(GundamParameter(_handle=parameter))
+        return out
 
-    @property
-    def priorCovarianceMatrix(self) -> Any:
+    def getPriorCovarianceMatrix(self) -> Any:
         return self._handle.getPriorCovarianceMatrix()
-
-    @property
-    def priorFullCovarianceMatrix(self) -> Any:
-        return self._handle.getPriorFullCovarianceMatrix()
-
-    def propagateOriginalToEigen(self) -> None:
-        self._handle.propagateOriginalToEigen()
-
-    def propagateEigenToOriginal(self) -> None:
-        self._handle.propagateEigenToOriginal()
 
 
 def wrapParameterSetList(parameterSets: Any) -> list[GundamParameterSet]:
