@@ -69,7 +69,6 @@ class GundamInterface:
 
             engine = gundam.FitterEngine()
             engine.setConfig(fitterEngineConfig)
-            self._setEngineRandomSeed(engine, self._runtime.randomSeed)
             with self._runtime.runFromWorkingDirectory():
                 engine.configure()
 
