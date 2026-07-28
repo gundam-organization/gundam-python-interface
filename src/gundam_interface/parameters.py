@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib
 import json
 from dataclasses import dataclass
 from typing import Any
@@ -86,3 +85,11 @@ class GundamParametersManager:
             GundamParameterSet(_handle=parameterSet)
             for parameterSet in self._handle.getParameterSetsList()
         ]
+
+    def getActiveParameterList(self) -> list[GundamParameter]:
+        out: list[GundamParameter] = []
+        for parameterSet in self.getParameterSetList():
+            for parameter in parameterSet.getParameterList():
+                if parameter.isEnabled():
+                    out.append(parameter)
+        return out

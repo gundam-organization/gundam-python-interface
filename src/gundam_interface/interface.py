@@ -9,7 +9,7 @@ from typing import Any, Iterator
 
 import numpy as np
 
-from .parameters import GundamParameter, GundamParametersManager
+from .parameters import GundamParametersManager
 from .root_state import GundamRootStateReader
 from .runtime import GundamRuntime
 from .samples import GundamSamples
@@ -53,7 +53,7 @@ class GundamInterface:
         self.fitterEngineConfig: Any | None = None
         self.engine: Any | None = None
         self.parametersManager: GundamParametersManager | None = None
-        self.parameters: list[GundamParameter] = []
+        self._isInitialized = False
 
     @property
     def isConfigured(self) -> bool:
@@ -61,25 +61,38 @@ class GundamInterface:
 
     @property
     def isInitialized(self) -> bool:
-        return bool(self.parameters)
+        return self._isInitialized
 
     @property
     def priors(self) -> np.ndarray:
-        return np.array([parameter.getPrior() for parameter in self.parameters], dtype=np.float64)
+        self._requireInitialized()
+        return np.array(
+            [parameter.getPrior() for parameter in self.parametersManager.getActiveParameterList()],
+            dtype=np.float64,
+        )
 
     @property
     def stepSizes(self) -> np.ndarray:
-        return np.array([parameter.getStepSize() for parameter in self.parameters], dtype=np.float64)
+        self._requireInitialized()
+        return np.array(
+            [parameter.getStepSize() for parameter in self.parametersManager.getActiveParameterList()],
+            dtype=np.float64,
+        )
 
     @property
     def throwValues(self) -> np.ndarray | None:
+        self._requireInitialized()
         if self.runtime.dataType != "Toy":
             return None
-        return np.array([parameter.getThrow() for parameter in self.parameters], dtype=np.float64)
+        return np.array(
+            [parameter.getThrow() for parameter in self.parametersManager.getActiveParameterList()],
+            dtype=np.float64,
+        )
 
     @property
     def parameterNames(self) -> list[str]:
-        return [parameter.getName() for parameter in self.parameters]
+        self._requireInitialized()
+        return [parameter.getName() for parameter in self.parametersManager.getActiveParameterList()]
 
     @property
     def modelSamples(self) -> GundamSamples:
@@ -137,6 +150,7 @@ class GundamInterface:
             self.parametersManager = GundamParametersManager(
                 _handle=engine.getLikelihoodInterface().getModelPropagator().getParametersManager()
             )
+            self._isInitialized = False
 
     def _buildConfigBuilder(self, gundam):
         if self.runtime.configJsonString is not None:
@@ -194,8 +208,7 @@ class GundamInterface:
                     self.engine.initialize()
                 self._loadDataHistogramsIfAvailable()
                 self._loadPostFitStateIfRequested()
-
-            self.refreshParameters()
+            self._isInitialized = True
 
     def _loadDataHistogramsIfAvailable(self) -> None:
         if self.runtime.outputRootPath is None or not self.runtime.loadDataHistograms:
@@ -234,40 +247,25 @@ class GundamInterface:
         self._requireParametersManager()
         return self.parametersManager.getParameterSetList()
 
-    def refreshParameters(self) -> list[GundamParameter]:
-        self._requireParametersManager()
-        parameters: list[GundamParameter] = []
-        for parameterSet in self.parametersManager.getParameterSetList():
-            for parameter in parameterSet.getParameterList():
-                if not parameter.isEnabled():
-                    continue
-
-                stepSize = float(parameter.getStepSize())
-                if not np.isfinite(stepSize) or stepSize <= 0:
-                    raise ValueError(
-                        f"Invalid step size for {parameter.getFullTitle()}: {stepSize}"
-                    )
-
-                parameters.append(GundamParameter(_handle=parameter))
-
-        self.parameters = parameters
-        return self.parameters
-
     def getParameterValues(self) -> np.ndarray:
-        self._requireParameters()
-        return np.array([parameter.getValue() for parameter in self.parameters], dtype=np.float64)
+        self._requireInitialized()
+        return np.array(
+            [parameter.getValue() for parameter in self.parametersManager.getActiveParameterList()],
+            dtype=np.float64,
+        )
 
     def setParameterValues(self, values: np.ndarray) -> None:
-        self._requireParameters()
+        self._requireInitialized()
+        parameters = self.parametersManager.getActiveParameterList()
         values = np.asarray(values, dtype=np.float64)
         if values.shape != self.priors.shape:
             raise ValueError(f"Expected parameter shape {self.priors.shape}, got {values.shape}")
-        for parameter, value in zip(self.parameters, values):
+        for parameter, value in zip(parameters, values):
             parameter.setValue(float(value))
 
     def resetToPrior(self) -> None:
-        self._requireParameters()
-        for parameter in self.parameters:
+        self._requireInitialized()
+        for parameter in self.parametersManager.getActiveParameterList():
             parameter.setValue(parameter.getPrior())
 
     def evaluateLlh(
@@ -276,7 +274,7 @@ class GundamInterface:
         logPath: str | os.PathLike[str] | None = None,
     ) -> float:
         with preservedWorkingDirectory():
-            self._requireParameters()
+            self._requireInitialized()
             if physicalValues is not None:
                 self.setParameterValues(physicalValues)
 
@@ -291,13 +289,12 @@ class GundamInterface:
         logPath: str | os.PathLike[str] | None = None,
     ) -> float:
         with preservedWorkingDirectory():
-            self._requireParameters()
+            self._requireInitialized()
             workingDirectory = Path(self.runtime.workDir).expanduser().resolve()
 
             with temporaryWorkingDirectory(workingDirectory):
                 self.engine.getMinimizer().minimize()
 
-            self.refreshParameters()
             return float(self.engine.getLikelihoodInterface().getLastLikelihood())
 
     def evaluatePostfitThrows(
@@ -316,7 +313,7 @@ class GundamInterface:
         from tqdm.auto import tqdm
 
         with preservedWorkingDirectory():
-            self._requireParameters()
+            self._requireInitialized()
             if nThrows < 1:
                 raise ValueError("nThrows must be >= 1")
             workingDirectory = Path(self.runtime.workDir).expanduser().resolve()
@@ -340,7 +337,6 @@ class GundamInterface:
                     likelihoodInterface.propagateAndEvalLikelihood()
                     llh[throwIndex] = float(likelihoodInterface.getLastLikelihood())
 
-            self.refreshParameters()
             return PostfitThrowSamples(
                 physicalValues=physicalValues,
                 llh=llh,
@@ -360,15 +356,6 @@ class GundamInterface:
             raise ValueError("seed must be >= 0")
         type(engine).setRandomSeed(seed)
 
-    def _requireConfigured(self) -> None:
-        if self.engine is None:
-            raise RuntimeError("GundamInterface.configure() must be called first")
-
-    def _requireParametersManager(self) -> None:
-        self._requireConfigured()
-        if self.parametersManager is None:
-            raise RuntimeError("GundamInterface parameters manager is not available")
-
     def _setLikelihoodDataType(self) -> None:
         self._requireConfigured()
         gundam = self.importGundam()
@@ -376,9 +363,10 @@ class GundamInterface:
         dataType = getattr(gundam.LikelihoodInterface.DataType, self.runtime.dataType)
         likelihoodInterface.setDataType(dataType)
 
-    def _requireParameters(self) -> None:
-        self._requireConfigured()
-        if not self.parameters:
-            raise RuntimeError(
-                "No active parameters are loaded. Call initialize() or refreshParameters() first."
-            )
+    def _requireConfigured(self) -> None:
+        if self.engine is None:
+            raise RuntimeError("GundamInterface.configure() must be called first")
+
+    def _requireInitialized(self) -> None:
+        if not self._isInitialized:
+            raise RuntimeError("GundamInterface.initialize() must be called first")
