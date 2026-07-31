@@ -54,6 +54,31 @@ class HistogramView:
 
 
 @dataclass(slots=True)
+class EventView:
+    """Light Python-side view over a GUNDAM Event handle."""
+
+    _handle: Any
+
+    def getIndices(self) -> Any:
+        return self._handle.getIndices()
+
+    def getWeights(self) -> Any:
+        return self._handle.getWeights()
+
+    def getVariables(self) -> Any:
+        return self._handle.getVariables()
+
+    def getSize(self) -> int:
+        return int(self._handle.getSize())
+
+    def getEventWeight(self) -> float:
+        return float(self._handle.getEventWeight())
+
+    def getSummary(self, printVars: bool = True) -> str:
+        return str(self._handle.getSummary(printVars))
+
+
+@dataclass(slots=True)
 class SampleView:
     """Light Python-side view over a GUNDAM Sample handle."""
 
@@ -64,6 +89,12 @@ class SampleView:
 
     def getHistogram(self) -> HistogramView:
         return HistogramView(_handle=self._handle.getHistogram())
+
+    def getEventList(self) -> list[EventView]:
+        return [
+            EventView(_handle=event)
+            for event in self._handle.getEventList()
+        ]
 
 
 @dataclass(slots=True)
