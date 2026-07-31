@@ -163,20 +163,20 @@ class GundamInterface:
         for sample in dataSamples:
             sampleName = sample.getName()
             histogramState = stateReader.readDataHistogram(sampleName)
-            binContents = sample.getHistogram().getBinContentList()
-            if len(binContents) != histogramState.sumWeights.shape[0]:
+            bins = sample.getHistogram().getBinList()
+            if len(bins) != histogramState.sumWeights.shape[0]:
                 raise ValueError(
                     f"Mismatching bin number for data sample '{sampleName}': "
                     f"ROOT histogram has {histogramState.sumWeights.shape[0]} bins, "
-                    f"GUNDAM sample has {len(binContents)} bins"
+                    f"GUNDAM sample has {len(bins)} bins"
                 )
-            for binContent, sumWeight, sqrtSumSqWeight in zip(
-                binContents,
+            for histogramBin, sumWeight, sqrtSumSqWeight in zip(
+                bins,
                 histogramState.sumWeights,
                 histogramState.sqrtSumSqWeights,
             ):
-                binContent.sumWeights = float(sumWeight)
-                binContent.sqrtSumSqWeights = float(sqrtSumSqWeight)
+                histogramBin.setSumWeights(sumWeight)
+                histogramBin.setSqrtSumSqWeights(sqrtSumSqWeight)
 
     def _loadPostFitStateIfRequested(self) -> None:
         if not self._runtime.loadPostFitState:
