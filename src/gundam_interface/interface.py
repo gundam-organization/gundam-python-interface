@@ -7,10 +7,11 @@ from typing import Any
 
 import numpy as np
 
+from .internal.propagator import PropagatorView
 from .internal.minimizer import GundamMinimizer
-from .internal.parameters import GundamParametersManager
+from .internal.parameters import ParametersManagerView
 from .internal.root_state import GundamRootStateReader
-from .internal.samples import GundamSamples
+from .internal.samples import SampleSetView
 from .internal.utils import preservedWorkingDirectory
 from .runtime import GundamRuntime
 
@@ -33,10 +34,6 @@ class GundamInterface:
         # GUNDAM objects
         self.engine: Any | None = None
 
-        # Interface views
-        self._parametersManager: GundamParametersManager | None = None
-        self._minimizer: GundamMinimizer | None = None
-
         # Internals
         self._isConfigured = False
         self._isInitialized = False
@@ -46,21 +43,15 @@ class GundamInterface:
 
     def getMinimizer(self) -> GundamMinimizer:
         self._requireConfigured()
-        if self._minimizer is None:
-            raise RuntimeError("GUNDAM minimizer is not available")
-        return self._minimizer
+        return GundamMinimizer(_handle=self.engine.getMinimizer())
 
-    @property
-    def modelSamples(self) -> GundamSamples:
+    def getModel(self) -> PropagatorView:
         self._requireConfigured()
-        propagator = self.engine.getLikelihoodInterface().getModelPropagator()
-        return GundamSamples(propagator=propagator)
+        return PropagatorView(_handle=self.engine.getLikelihoodInterface().getModelPropagator())
 
-    @property
-    def dataSamples(self) -> GundamSamples:
+    def getData(self) -> PropagatorView:
         self._requireConfigured()
-        propagator = self.engine.getLikelihoodInterface().getDataPropagator()
-        return GundamSamples(propagator=propagator)
+        return PropagatorView(_handle=self.engine.getLikelihoodInterface().getDataPropagator())
 
     def configure(self, validatePaths: bool = True) -> None:
         with preservedWorkingDirectory():
@@ -76,10 +67,6 @@ class GundamInterface:
                 engine.configure()
 
             self.engine = engine
-            self._parametersManager = GundamParametersManager(
-                _handle=engine.getLikelihoodInterface().getModelPropagator().getParametersManager()
-            )
-            self._minimizer = GundamMinimizer(_handle=engine.getMinimizer())
             self._isConfigured = True
             self._isInitialized = False
 
@@ -103,10 +90,6 @@ class GundamInterface:
                 self._loadDataHistogramsIfAvailable()
                 self._loadPostFitStateIfRequested()
             self._isInitialized = True
-
-    def getParametersManager(self) -> GundamParametersManager | None:
-        self._requireConfigured()
-        return self._parametersManager
 
     def evaluateLlh(
         self,
@@ -177,7 +160,7 @@ class GundamInterface:
 
         stateReader = GundamRootStateReader(self._runtime.absoluteOutputRootPath)
         for sample in self.dataSamples:
-            sampleName = str(sample.handle.getName())
+            sampleName = str(sample._handle.getName())
             histogramState = stateReader.readDataHistogram(sampleName)
             binContents = sample.histogram.binContents
             if len(binContents) != histogramState.sumWeights.shape[0]:

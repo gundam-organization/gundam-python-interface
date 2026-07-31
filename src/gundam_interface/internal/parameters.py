@@ -10,7 +10,7 @@ from .utils import GundamCovarianceMatrix
 
 
 @dataclass(slots=True)
-class GundamParameter:
+class ParameterView:
     """Light Python-side view over a GUNDAM Parameter handle."""
 
     _handle: Any
@@ -41,7 +41,7 @@ class GundamParameter:
 
 
 @dataclass(slots=True)
-class GundamParameterSet:
+class ParameterSetView:
     """Light Python-side view over a GUNDAM ParameterSet handle."""
 
     _handle: Any
@@ -49,18 +49,18 @@ class GundamParameterSet:
     def isEnableEigenDecomp(self) -> bool:
         return bool(self._handle.isEnableEigenDecomp())
 
-    def getParameterList(self) -> list[GundamParameter]:
-        out: list[GundamParameter] = []
+    def getParameterList(self) -> list[ParameterView]:
+        out: list[ParameterView] = []
         for parameter in self._handle.getParameterList():
-            out.append(GundamParameter(_handle=parameter))
+            out.append(ParameterView(_handle=parameter))
         return out
 
-    def getEigenParameterList(self) -> list[GundamParameter]:
+    def getEigenParameterList(self) -> list[ParameterView]:
         if not self._handle.isEnableEigenDecomp():
             return []
-        out: list[GundamParameter] = []
+        out: list[ParameterView] = []
         for parameter in self._handle.getEigenParameterList():
-            out.append(GundamParameter(_handle=parameter))
+            out.append(ParameterView(_handle=parameter))
         return out
 
     def getPriorCovarianceMatrix(self) -> Any:
@@ -68,7 +68,7 @@ class GundamParameterSet:
 
 
 @dataclass(slots=True)
-class GundamParametersManager:
+class ParametersManagerView:
     """Light Python-side view over a GUNDAM ParametersManager handle."""
 
     _handle: Any
@@ -82,14 +82,14 @@ class GundamParametersManager:
     def injectParametersState(self, jsonString_: str) -> None:
         self._handle.injectParameterValues(jsonString_)
 
-    def getParameterSetList(self) -> list[GundamParameterSet]:
+    def getParameterSetList(self) -> list[ParameterSetView]:
         return [
-            GundamParameterSet(_handle=parameterSet)
+            ParameterSetView(_handle=parameterSet)
             for parameterSet in self._handle.getParameterSetsList()
         ]
 
-    def getActiveParameterList(self) -> list[GundamParameter]:
-        out: list[GundamParameter] = []
+    def getActiveParameterList(self) -> list[ParameterView]:
+        out: list[ParameterView] = []
         for parameterSet in self.getParameterSetList():
             parList = parameterSet.getParameterList() if not parameterSet.isEnableEigenDecomp() else parameterSet.getEigenParameterList()
             for parameter in parList:

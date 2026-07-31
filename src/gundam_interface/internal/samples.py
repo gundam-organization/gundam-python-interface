@@ -289,16 +289,15 @@ class GundamHistogram:
 
 
 @dataclass(frozen=True, slots=True)
-class GundamSample:
+class SampleView:
     """Python-side access to a GUNDAM sample."""
 
-    index: int
-    handle: Any
+    _handle: Any
 
     @property
     def histogram(self) -> GundamHistogram:
         """Sample histogram."""
-        return GundamHistogram(self.handle.getHistogram())
+        return GundamHistogram(self._handle.getHistogram())
 
     @property
     def sumWeights(self) -> np.ndarray:
@@ -307,10 +306,10 @@ class GundamSample:
 
 
 @dataclass(frozen=True, slots=True)
-class GundamSamples:
+class SampleSetView:
     """Collection wrapper for GUNDAM samples."""
 
-    propagator: Any
+    _handle: Any
 
     @property
     def sampleSet(self) -> Any:
@@ -325,12 +324,12 @@ class GundamSamples:
     def __len__(self) -> int:
         return len(self.handles)
 
-    def __iter__(self) -> Iterator[GundamSample]:
+    def __iter__(self) -> Iterator[SampleView]:
         for index, sample in enumerate(self.handles):
-            yield GundamSample(index=index, handle=sample)
+            yield SampleView(index=index, _handle=sample)
 
-    def __getitem__(self, index: int) -> GundamSample:
-        return GundamSample(index=index, handle=self.handles[index])
+    def __getitem__(self, index: int) -> SampleView:
+        return SampleView(index=index, _handle=self.handles[index])
 
     def histogram(self, index: int) -> GundamHistogram:
         """Histogram for one sample."""

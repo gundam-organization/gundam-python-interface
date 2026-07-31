@@ -8,8 +8,8 @@ import pytest
 import gundam_interface
 from gundam_interface.internal.logging import GundamLogRedirector
 from gundam_interface.internal.minimizer import GundamMinimizer
-from gundam_interface.internal.parameters import GundamParametersManager
-from gundam_interface.internal.samples import GundamHistogram, GundamSamples
+from gundam_interface.internal.parameters import ParametersManagerView
+from gundam_interface.internal.samples import GundamHistogram, SampleSetView
 
 
 def test_gundam_log_redirector_does_not_redirect_regular_python(monkeypatch) -> None:
@@ -196,7 +196,7 @@ def test_get_minimizer_exposes_minimize(tmp_path) -> None:
 
 
 def test_gundam_samples_exposes_histogram_sum_weights() -> None:
-    samples = GundamSamples(
+    samples = SampleSetView(
         propagator=FakePropagator(
             [FakeSample([1.0, 2.5, 3.0]), FakeSample([4.0, 5.0])]
         ),
@@ -500,7 +500,7 @@ def test_initialize_loads_postfit_state_when_requested(tmp_path, monkeypatch) ->
     runtime._gundamModule = fakeGundam
     interface = gundam_interface.GundamInterface(runtime=runtime)
     interface.engine = FakeInitializableEngine(fakeParametersManager)
-    interface._parametersManager = GundamParametersManager(_handle=fakeParametersManager)
+    interface._parametersManager = ParametersManagerView(_handle=fakeParametersManager)
 
     interface.initialize()
 
@@ -533,7 +533,7 @@ def test_initialize_restores_data_histograms_from_output_root_by_default(
     runtime._gundamModule = fakeGundam
     interface = gundam_interface.GundamInterface(runtime=runtime)
     interface.engine = FakeInitializableEngine(fakeParametersManager)
-    interface._parametersManager = GundamParametersManager(_handle=fakeParametersManager)
+    interface._parametersManager = ParametersManagerView(_handle=fakeParametersManager)
 
     interface.initialize()
 
@@ -559,7 +559,7 @@ def test_initialize_can_skip_data_histograms_from_output_root(tmp_path) -> None:
     runtime._gundamModule = fakeGundam
     interface = gundam_interface.GundamInterface(runtime=runtime)
     interface.engine = FakeInitializableEngine(fakeParametersManager)
-    interface._parametersManager = GundamParametersManager(_handle=fakeParametersManager)
+    interface._parametersManager = ParametersManagerView(_handle=fakeParametersManager)
 
     interface.initialize()
 
@@ -587,7 +587,7 @@ def test_initialize_fails_when_requested_postfit_state_is_missing(tmp_path, monk
     runtime._gundamModule = fakeGundam
     interface = gundam_interface.GundamInterface(runtime=runtime)
     interface.engine = FakeInitializableEngine(FakeInjectingParametersManager())
-    interface._parametersManager = GundamParametersManager(
+    interface._parametersManager = ParametersManagerView(
         _handle=FakeInjectingParametersManager()
     )
 
@@ -617,7 +617,7 @@ def test_initialize_fails_when_saved_data_histogram_bin_count_mismatches(
     runtime._gundamModule = fakeGundam
     interface = gundam_interface.GundamInterface(runtime=runtime)
     interface.engine = FakeInitializableEngine(FakeInjectingParametersManager())
-    interface._parametersManager = GundamParametersManager(
+    interface._parametersManager = ParametersManagerView(
         _handle=FakeInjectingParametersManager()
     )
 
