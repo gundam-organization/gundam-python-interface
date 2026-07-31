@@ -159,10 +159,11 @@ class GundamInterface:
             return
 
         stateReader = GundamRootStateReader(self._runtime.absoluteOutputRootPath)
-        for sample in self.dataSamples:
-            sampleName = str(sample._handle.getName())
+        dataSamples = self.getData().getSampleSet().getSampleList()
+        for sample in dataSamples:
+            sampleName = sample.getName()
             histogramState = stateReader.readDataHistogram(sampleName)
-            binContents = sample.histogram.binContents
+            binContents = sample.getHistogram().getBinContentList()
             if len(binContents) != histogramState.sumWeights.shape[0]:
                 raise ValueError(
                     f"Mismatching bin number for data sample '{sampleName}': "
