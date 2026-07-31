@@ -59,11 +59,41 @@ class EventView:
 
     _handle: Any
 
-    def getIndices(self) -> Any:
-        return self._handle.getIndices()
+    @dataclass(frozen=True, slots=True, init=False)
+    class Indices:
+        """Python value object for the source indices of a GUNDAM event."""
 
-    def getWeights(self) -> Any:
-        return self._handle.getWeights()
+        dataset: int
+        treeFile: int
+        sample: int
+        bin: int
+        entry: int
+        treeEntry: int
+
+        def __init__(self, handle: Any) -> None:
+            object.__setattr__(self, "dataset", int(handle.dataset))
+            object.__setattr__(self, "treeFile", int(handle.treeFile))
+            object.__setattr__(self, "sample", int(handle.sample))
+            object.__setattr__(self, "bin", int(handle.bin))
+            object.__setattr__(self, "entry", int(handle.entry))
+            object.__setattr__(self, "treeEntry", int(handle.treeEntry))
+
+    @dataclass(frozen=True, slots=True, init=False)
+    class Weights:
+        """Python value object for the weights of a GUNDAM event."""
+
+        base: float
+        current: float
+
+        def __init__(self, handle: Any) -> None:
+            object.__setattr__(self, "base", float(handle.base))
+            object.__setattr__(self, "current", float(handle.current))
+
+    def getIndices(self) -> EventView.Indices:
+        return EventView.Indices(self._handle.getIndices())
+
+    def getWeights(self) -> EventView.Weights:
+        return EventView.Weights(self._handle.getWeights())
 
     def getVariables(self) -> Any:
         return self._handle.getVariables()
