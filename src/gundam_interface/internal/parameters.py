@@ -6,86 +6,86 @@ from typing import Any
 
 import numpy as np
 
-from .utils import GundamCovarianceMatrix
+from .utils import CovarianceMatrixView
 
 
 @dataclass(slots=True)
 class ParameterView:
     """Light Python-side view over a GUNDAM Parameter handle."""
 
-    _handle: Any
+    handle: Any
 
     def getName(self) -> str:
-        return str(self._handle.getName())
+        return str(self.handle.getName())
 
     def getFullTitle(self) -> str:
-        return str(self._handle.getFullTitle())
+        return str(self.handle.getFullTitle())
 
     def isEnabled(self) -> bool:
-        return bool(self._handle.isEnabled())
+        return bool(self.handle.isEnabled())
 
     def getStepSize(self) -> float:
-        return float(self._handle.getStepSize())
+        return float(self.handle.getStepSize())
 
     def getPrior(self) -> float:
-        return float(self._handle.getPriorValue())
+        return float(self.handle.getPriorValue())
 
     def getThrow(self) -> float:
-        return float(self._handle.getThrowValue())
+        return float(self.handle.getThrowValue())
 
     def getValue(self) -> float:
-        return float(self._handle.getParameterValue())
+        return float(self.handle.getParameterValue())
 
     def setValue(self, value: float) -> None:
-        self._handle.setParameterValue(float(value), True)
+        self.handle.setParameterValue(float(value), True)
 
 
 @dataclass(slots=True)
 class ParameterSetView:
     """Light Python-side view over a GUNDAM ParameterSet handle."""
 
-    _handle: Any
+    handle: Any
 
     def isEnableEigenDecomp(self) -> bool:
-        return bool(self._handle.isEnableEigenDecomp())
+        return bool(self.handle.isEnableEigenDecomp())
 
     def getParameterList(self) -> list[ParameterView]:
         out: list[ParameterView] = []
-        for parameter in self._handle.getParameterList():
-            out.append(ParameterView(_handle=parameter))
+        for parameter in self.handle.getParameterList():
+            out.append(ParameterView(handle=parameter))
         return out
 
     def getEigenParameterList(self) -> list[ParameterView]:
-        if not self._handle.isEnableEigenDecomp():
+        if not self.handle.isEnableEigenDecomp():
             return []
         out: list[ParameterView] = []
-        for parameter in self._handle.getEigenParameterList():
-            out.append(ParameterView(_handle=parameter))
+        for parameter in self.handle.getEigenParameterList():
+            out.append(ParameterView(handle=parameter))
         return out
 
     def getPriorCovarianceMatrix(self) -> Any:
-        return GundamCovarianceMatrix(self._handle.getPriorCovarianceMatrix())
+        return CovarianceMatrixView(self.handle.getPriorCovarianceMatrix())
 
 
 @dataclass(slots=True)
 class ParametersManagerView:
     """Light Python-side view over a GUNDAM ParametersManager handle."""
 
-    _handle: Any
+    handle: Any
 
     def throwParameters(self) -> None:
-        self._handle.throwParameters()
+        self.handle.throwParameters()
 
     def exportParametersStateJson(self) -> str:
-        return json.loads(self._handle.exportParameterInjectorConfig().toString())
+        return json.loads(self.handle.exportParameterInjectorConfig().toString())
 
     def injectParametersState(self, jsonString_: str) -> None:
-        self._handle.injectParameterValues(jsonString_)
+        self.handle.injectParameterValues(jsonString_)
 
     def getParameterSetList(self) -> list[ParameterSetView]:
         return [
-            ParameterSetView(_handle=parameterSet)
-            for parameterSet in self._handle.getParameterSetsList()
+            ParameterSetView(handle=parameterSet)
+            for parameterSet in self.handle.getParameterSetsList()
         ]
 
     def getActiveParameterList(self) -> list[ParameterView]:

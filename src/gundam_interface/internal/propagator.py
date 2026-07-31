@@ -5,14 +5,18 @@ from typing import Any
 
 from .parameters import ParametersManagerView
 from .samples import SampleSetView
+from .engine import EngineView
 
 
 @dataclass(slots=True)
 class PropagatorView:
-    _handle: Any
+    handle: Any
 
     def getParametersManager(self) -> ParametersManagerView:
-        return ParametersManagerView(self._handle.getParameterManager())
+        return ParametersManagerView(handle=self.handle.getParameterManager())
 
     def getSampleSet(self) -> SampleSetView:
-        return SampleSetView(self._handle.getSampleSet())
+        return SampleSetView(handle=self.handle.getSampleSet())
+
+    def getEngine(self) -> EngineView:
+        return EngineView(handle=self.handle.getEventDialCache().getCache())

@@ -47,11 +47,11 @@ class GundamInterface:
 
     def getModel(self) -> PropagatorView:
         self._requireConfigured()
-        return PropagatorView(_handle=self.engine.getLikelihoodInterface().getModelPropagator())
+        return PropagatorView(handle=self.engine.getLikelihoodInterface().getModelPropagator())
 
     def getData(self) -> PropagatorView:
         self._requireConfigured()
-        return PropagatorView(_handle=self.engine.getLikelihoodInterface().getDataPropagator())
+        return PropagatorView(handle=self.engine.getLikelihoodInterface().getDataPropagator())
 
     def configure(self, validatePaths: bool = True) -> None:
         with preservedWorkingDirectory():

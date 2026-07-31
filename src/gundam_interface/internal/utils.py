@@ -11,7 +11,7 @@ import numpy as np
 
 
 @dataclass(slots=True)
-class GundamCovarianceMatrix:
+class CovarianceMatrixView:
     """Light Python-side view over a GUNDAM TMatrixDSym handle."""
 
     _handle: Any

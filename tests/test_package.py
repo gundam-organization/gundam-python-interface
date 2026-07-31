@@ -426,8 +426,8 @@ def test_gundam_interface_exposes_minimizer_fit_parameters(tmp_path) -> None:
     wrappedParameters = minimizer.getFitParameters()
 
     assert len(wrappedParameters) == 2
-    assert wrappedParameters[0]._handle is fitParameters[0]
-    assert wrappedParameters[1]._handle is fitParameters[1]
+    assert wrappedParameters[0].handle is fitParameters[0]
+    assert wrappedParameters[1].handle is fitParameters[1]
 
 
 def test_gundam_interface_exposes_minimizer_view(tmp_path) -> None:
@@ -500,7 +500,7 @@ def test_initialize_loads_postfit_state_when_requested(tmp_path, monkeypatch) ->
     runtime._gundamModule = fakeGundam
     interface = gundam_interface.GundamInterface(runtime=runtime)
     interface.engine = FakeInitializableEngine(fakeParametersManager)
-    interface._parametersManager = ParametersManagerView(_handle=fakeParametersManager)
+    interface._parametersManager = ParametersManagerView(handle=fakeParametersManager)
 
     interface.initialize()
 
@@ -533,7 +533,7 @@ def test_initialize_restores_data_histograms_from_output_root_by_default(
     runtime._gundamModule = fakeGundam
     interface = gundam_interface.GundamInterface(runtime=runtime)
     interface.engine = FakeInitializableEngine(fakeParametersManager)
-    interface._parametersManager = ParametersManagerView(_handle=fakeParametersManager)
+    interface._parametersManager = ParametersManagerView(handle=fakeParametersManager)
 
     interface.initialize()
 
@@ -559,7 +559,7 @@ def test_initialize_can_skip_data_histograms_from_output_root(tmp_path) -> None:
     runtime._gundamModule = fakeGundam
     interface = gundam_interface.GundamInterface(runtime=runtime)
     interface.engine = FakeInitializableEngine(fakeParametersManager)
-    interface._parametersManager = ParametersManagerView(_handle=fakeParametersManager)
+    interface._parametersManager = ParametersManagerView(handle=fakeParametersManager)
 
     interface.initialize()
 
@@ -588,7 +588,7 @@ def test_initialize_fails_when_requested_postfit_state_is_missing(tmp_path, monk
     interface = gundam_interface.GundamInterface(runtime=runtime)
     interface.engine = FakeInitializableEngine(FakeInjectingParametersManager())
     interface._parametersManager = ParametersManagerView(
-        _handle=FakeInjectingParametersManager()
+        handle=FakeInjectingParametersManager()
     )
 
     with pytest.raises(KeyError, match="parameterStateAfterMinimize_TNamed"):
@@ -618,7 +618,7 @@ def test_initialize_fails_when_saved_data_histogram_bin_count_mismatches(
     interface = gundam_interface.GundamInterface(runtime=runtime)
     interface.engine = FakeInitializableEngine(FakeInjectingParametersManager())
     interface._parametersManager = ParametersManagerView(
-        _handle=FakeInjectingParametersManager()
+        handle=FakeInjectingParametersManager()
     )
 
     with pytest.raises(ValueError, match="Mismatching bin number"):
