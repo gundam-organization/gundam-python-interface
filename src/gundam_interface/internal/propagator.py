@@ -5,7 +5,7 @@ from typing import Any
 
 from .parameters import ParametersManagerView
 from .samples import SampleSetView
-from .engine import EngineView
+from .dial import DialCacheView
 
 
 @dataclass(slots=True)
@@ -18,5 +18,5 @@ class PropagatorView:
     def getSampleSet(self) -> SampleSetView:
         return SampleSetView(handle=self.handle.getSampleSet())
 
-    def getEngine(self) -> EngineView:
-        return EngineView(handle=self.handle.getEventDialCache().getCache())
+    def getDialCacheList(self) -> list[DialCacheView]:
+        return [DialCacheView(elm) for elm in self.handle.getEventDialCache().getCache()]
