@@ -99,7 +99,7 @@ class GundamInterface:
         with preservedWorkingDirectory():
             self._requireInitialized()
             if physicalValues is not None:
-                self._parametersManager.setParameterValues(physicalValues)
+                self.getModel().getParametersManager().setParameterValues(physicalValues)
 
             with self._runtime.runFromWorkingDirectory():
                 self.engine.getLikelihoodInterface().propagateAndEvalLikelihood()

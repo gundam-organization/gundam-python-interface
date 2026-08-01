@@ -59,35 +59,49 @@ class EventView:
 
     handle: Any
 
-    @dataclass(frozen=True, slots=True, init=False)
+    @dataclass(frozen=True, slots=True)
     class Indices:
         """Python value object for the source indices of a GUNDAM event."""
+        handle: Any
 
-        dataset: int
-        treeFile: int
-        sample: int
-        bin: int
-        entry: int
-        treeEntry: int
+        @property
+        def dataset(self) -> int:
+            return int(self.handle.dataset)
 
-        def __init__(self, handle: Any) -> None:
-            object.__setattr__(self, "dataset", int(handle.dataset))
-            object.__setattr__(self, "treeFile", int(handle.treeFile))
-            object.__setattr__(self, "sample", int(handle.sample))
-            object.__setattr__(self, "bin", int(handle.bin))
-            object.__setattr__(self, "entry", int(handle.entry))
-            object.__setattr__(self, "treeEntry", int(handle.treeEntry))
+        @property
+        def sample(self) -> int:
+            return int(self.handle.sample)
 
-    @dataclass(frozen=True, slots=True, init=False)
+        @property
+        def bin(self) -> int:
+            return int(self.handle.bin)
+
+        @property
+        def entry(self) -> int:
+            return int(self.handle.entry)
+
+        @property
+        def treeFile(self) -> int:
+            return int(self.handle.treeFile)
+
+        @property
+        def treeEntry(self) -> int:
+            return int(self.handle.treeEntry)
+
+
+    @dataclass(frozen=True, slots=True)
     class Weights:
         """Python value object for the weights of a GUNDAM event."""
+        handle: Any
 
-        base: float
-        current: float
+        @property
+        def base(self) -> float:
+            return float(self.handle.base)
 
-        def __init__(self, handle: Any) -> None:
-            object.__setattr__(self, "base", float(handle.base))
-            object.__setattr__(self, "current", float(handle.current))
+        @property
+        def current(self) -> float:
+            return float(self.handle.current)
+
 
     def getIndices(self) -> EventView.Indices:
         return EventView.Indices(self.handle.getIndices())

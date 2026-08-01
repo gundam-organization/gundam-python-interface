@@ -36,6 +36,9 @@ class ParameterView:
     def getValue(self) -> float:
         return float(self.handle.getParameterValue())
 
+    def getSummary(self) -> str:
+        return str(self.handle.getSummary())
+
     def setValue(self, value: float) -> None:
         self.handle.setParameterValue(float(value), True)
 
