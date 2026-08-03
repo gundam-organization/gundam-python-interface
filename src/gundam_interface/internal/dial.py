@@ -22,7 +22,13 @@ class DialView:
         return str(self.handle.getDialInterface().getSummary())
 
     def evaluateResponse(self) -> float:
-        return float(self.handle.getResponse())
+        # we need to update the intput buffer manually
+        self.updateInputBuffer()
+        # return the response
+        return float(self.handle.getDialInterface().evalResponse())
+
+    def updateInputBuffer(self) -> None:
+        self.handle.getDialInterface().getInputBuffer().update()
 
 
 @dataclass(slots=True)
@@ -37,4 +43,5 @@ class EventDialCacheView:
         return [DialView(elm) for elm in self.handle.dialResponseCacheList()]
 
     def getDialListAffecting(self, parameter_: ParameterView) -> list[DialView]:
-        return [DialView(elm) for elm in self.handle.getDialListAffecting(parameter_.handle)]
+        idxList = list(self.handle.getDialIndicesAffecting(parameter_.handle))
+        return [DialView(self.handle.dialResponseCacheList[idx]) for idx in idxList]
