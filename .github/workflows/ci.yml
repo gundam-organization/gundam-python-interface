@@ -24,11 +24,12 @@ jobs:
 
       - name: Run tests with the GUNDAM engine
         run: >-
-          docker run --rm --platform linux/amd64 gundam-python-interface-ci
-          python -m pytest -v --gundam-lib-path /home/work/install/lib
+          docker run --rm --platform linux/amd64 --workdir /workspace
+          gundam-python-interface-ci python -m pytest -v tests
+          --gundam-lib-path /home/work/install/lib
 
       - name: Run ruff
-        run: docker run --rm --platform linux/amd64 gundam-python-interface-ci python -m ruff check .
+        run: docker run --rm --platform linux/amd64 --workdir /workspace gundam-python-interface-ci python -m ruff check .
 
   build:
     name: Build package
