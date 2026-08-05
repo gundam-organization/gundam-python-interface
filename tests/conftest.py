@@ -7,6 +7,15 @@ import pytest
 import gundam_interface
 
 
+def pytest_addoption(parser):
+    parser.addoption(
+        "--gundam-lib-path",
+        action="store",
+        default=None,
+        help="Path to the GUNDAM installation lib directory.",
+    )
+
+
 @dataclass(frozen=True)
 class GundamTestInputs:
     rootPath: Path
@@ -16,7 +25,6 @@ class GundamTestInputs:
 @pytest.fixture(scope="session")
 def gundam_test_inputs(tmp_path_factory) -> GundamTestInputs:
     """Generate the ROOT/YAML pair shared by the numbered integration tests."""
-    pytest.importorskip("GUNDAM")
     import uproot
 
     workDir = tmp_path_factory.mktemp("gundam-inputs")
@@ -58,12 +66,14 @@ fitterEngineConfig:
 
 
 @pytest.fixture(scope="session")
-def configured_gundam_interface(gundam_test_inputs: GundamTestInputs):
+def configured_gundam_interface(gundam_test_inputs, request):
     """Configure and initialize one real interface for the numbered tests."""
     interface = gundam_interface.GundamInterface(
         runtime=gundam_interface.GundamRuntime(
             workDir=gundam_test_inputs.configPath.parent,
-            loader=gundam_interface.GundamLoader(),
+            loader=gundam_interface.GundamLoader(
+                gundamLibPath=request.config.getoption("--gundam-lib-path")
+            ),
             configPath=gundam_test_inputs.configPath,
             dataType="Asimov",
         ),

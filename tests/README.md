@@ -42,7 +42,8 @@ pytest -q
 ```
 
 The full suite includes both unit and integration tests. The integration tests
-are automatically skipped when the `GUNDAM` module cannot be imported.
+require a usable GUNDAM installation. Pass its `lib` directory with
+`--gundam-lib-path` when it is not already importable from the environment.
 
 ## Integration test sequence
 
@@ -71,6 +72,13 @@ Run only the input-generation test:
 
 ```bash
 .venv/bin/pytest -q tests/test_00_generate_inputs.py
+```
+
+Run the integration tests with an explicit GUNDAM installation path:
+
+```bash
+.venv/bin/pytest -q tests/test_0*.py \
+  --gundam-lib-path /home/work/install/lib
 ```
 
 Run the unit tests in `test_package.py`:

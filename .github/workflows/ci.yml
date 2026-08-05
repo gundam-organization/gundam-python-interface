@@ -15,20 +15,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run tests with the GUNDAM Docker image
+      - name: Build the GUNDAM test image
         run: |
-          docker run --rm \
+          docker build \
             --platform linux/amd64 \
-            --volume "${GITHUB_WORKSPACE}:/workspace" \
-            --workdir /workspace \
-            nadrino/gundam:latest \
-            bash -lc '
-              python -c "import GUNDAM; print(\"GUNDAM loaded from\", GUNDAM.__file__)"
-              python -m pip install --upgrade pip
-              python -m pip install -e ".[dev]"
-              python -m pytest -v
-              python -m ruff check .
-            '
+            --tag gundam-python-interface-ci \
+            .
+
+      - name: Run tests with the GUNDAM engine
+        run: >-
+          docker run --rm --platform linux/amd64 gundam-python-interface-ci
+          python -m pytest -v --gundam-lib-path /home/work/install/lib
+
+      - name: Run ruff
+        run: docker run --rm --platform linux/amd64 gundam-python-interface-ci python -m ruff check .
 
   build:
     name: Build package
