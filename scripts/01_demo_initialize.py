@@ -24,7 +24,7 @@ if srcPath.exists() and str(srcPath) not in sys.path:
     sys.path.insert(0, str(srcPath))
 # ~ end of this block
 
-from gundam_interface import GundamInterface, GundamLoader, GundamRuntime
+from gundam_interface import GundamInterface, GundamLoader, GundamRuntime  # noqa: E402
 
 np.random.seed(seed)
 
