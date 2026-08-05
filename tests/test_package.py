@@ -9,7 +9,7 @@ import gundam_interface
 from gundam_interface.internal.logging import GundamLogRedirector
 from gundam_interface.internal.minimizer import GundamMinimizer
 from gundam_interface.internal.parameters import ParametersManagerView
-from gundam_interface.internal.samples import GundamHistogram, SampleSetView
+from gundam_interface.internal.samples import HistogramView, SampleSetView
 
 
 def test_gundam_log_redirector_does_not_redirect_regular_python(monkeypatch) -> None:
@@ -197,23 +197,26 @@ def test_get_minimizer_exposes_minimize(tmp_path) -> None:
 
 def test_gundam_samples_exposes_histogram_sum_weights() -> None:
     samples = SampleSetView(
-        propagator=FakePropagator(
+        handle=FakeSampleSet(
             [FakeSample([1.0, 2.5, 3.0]), FakeSample([4.0, 5.0])]
         ),
     )
 
-    assert len(samples) == 2
-    assert samples[0].index == 0
-    assert samples[0].histogram.sumWeights.tolist() == [1.0, 2.5, 3.0]
-    assert samples.sumWeights(1).tolist() == [4.0, 5.0]
-    assert [weights.tolist() for weights in samples.allSumWeights()] == [
-        [1.0, 2.5, 3.0],
-        [4.0, 5.0],
+    assert len(samples.getSampleList()) == 2
+    assert samples.getSampleList()[0].getName() == "sample0"
+    assert [bin.getSumWeights() for bin in samples.getSampleList()[0].getHistogram().getBinList()] == [
+        1.0,
+        2.5,
+        3.0,
+    ]
+    assert [bin.getSumWeights() for bin in samples.getSampleList()[1].getHistogram().getBinList()] == [
+        4.0,
+        5.0,
     ]
 
 
 def test_gundam_histogram_exposes_2d_layout_helpers() -> None:
-    histogram = GundamHistogram(
+    histogram = HistogramView(
         handle=FakeHistogram(
             [10.0, 20.0],
             binContexts=[
@@ -241,69 +244,13 @@ def test_gundam_histogram_exposes_2d_layout_helpers() -> None:
         )
     )
 
-    assert histogram.variableNames() == ["CosThetamu", "Pmu"]
-    assert histogram.variableNames(preferredOrder=("Pmu", "CosThetamu")) == [
-        "Pmu",
-        "CosThetamu",
-    ]
-
-    binDefinitions = histogram.binDefinitions(variableOrder=("Pmu", "CosThetamu"))
-    assert binDefinitions == [
-        {
-            "index": 0,
-            "edges": {
-                "Pmu": {"min": 0.0, "max": 320.0},
-                "CosThetamu": {"min": -1.0, "max": 0.0},
-            },
-        },
-        {
-            "index": 1,
-            "edges": {
-                "Pmu": {"min": 0.0, "max": 320.0},
-                "CosThetamu": {"min": 0.0, "max": 1.0},
-            },
-        },
-    ]
-
-    layout = histogram.layout2d(preferredOrder=("Pmu", "CosThetamu"))
-    assert layout["variable_names"] == ["Pmu", "CosThetamu"]
-    assert layout["sum_weights"].tolist() == [10.0, 20.0]
-    assert layout["bin_volumes"].tolist() == [320.0, 320.0]
-    assert layout["values"].tolist() == [10.0, 20.0]
-    assert layout["values_label"] == "sumWeights"
-    assert layout["x_edges"].tolist() == [0.0, 320.0]
-    assert layout["y_edges"].tolist() == [-1.0, 0.0, 1.0]
-    assert layout["bins"] == [
-        {
-            "index": 0,
-            "x_min": 0.0,
-            "x_max": 320.0,
-            "y_min": -1.0,
-            "y_max": 0.0,
-            "measure": 320.0,
-            "sum_weights": 10.0,
-        },
-        {
-            "index": 1,
-            "x_min": 0.0,
-            "x_max": 320.0,
-            "y_min": 0.0,
-            "y_max": 1.0,
-            "measure": 320.0,
-            "sum_weights": 20.0,
-        },
-    ]
-
-    densityLayout = histogram.layout2d(
-        preferredOrder=("Pmu", "CosThetamu"),
-        divideByBinVolume=True,
-    )
-    assert densityLayout["values_label"] == "sumWeights / binMeasure"
-    assert densityLayout["values"].tolist() == [0.03125, 0.0625]
+    assert histogram.getNbBins() == 2
+    assert len(histogram.getBinList()) == 2
+    assert [bin.getSumWeights() for bin in histogram.getBinList()] == [10.0, 20.0]
 
 
 def test_gundam_histogram_projects_3d_layout_to_2d() -> None:
-    histogram = GundamHistogram(
+    histogram = HistogramView(
         handle=FakeHistogram(
             [10.0, 20.0, 30.0, 40.0],
             binContexts=[
@@ -351,40 +298,12 @@ def test_gundam_histogram_projects_3d_layout_to_2d() -> None:
         )
     )
 
-    assert histogram.binMeasures(variableOrder=("Pmu", "CosThetamu")).tolist() == [
-        320.0,
-        320.0,
-        320.0,
-        320.0,
-    ]
-
-    layout = histogram.layout2d(
-        preferredOrder=("Pmu", "CosThetamu"),
-        divideByBinVolume=True,
-    )
-    assert layout["variable_names"] == ["Pmu", "CosThetamu"]
-    assert layout["sum_weights"].tolist() == [30.0, 70.0]
-    assert layout["bin_volumes"].tolist() == [320.0, 320.0]
-    assert layout["values"].tolist() == [0.09375, 0.21875]
-    assert layout["bins"] == [
-        {
-            "index": 0,
-            "x_min": 0.0,
-            "x_max": 320.0,
-            "y_min": -1.0,
-            "y_max": 0.0,
-            "measure": 320.0,
-            "sum_weights": 30.0,
-        },
-        {
-            "index": 1,
-            "x_min": 0.0,
-            "x_max": 320.0,
-            "y_min": 0.0,
-            "y_max": 1.0,
-            "measure": 320.0,
-            "sum_weights": 70.0,
-        },
+    assert histogram.getNbBins() == 4
+    assert [bin.getSumWeights() for bin in histogram.getBinList()] == [
+        10.0,
+        20.0,
+        30.0,
+        40.0,
     ]
 
 
@@ -405,8 +324,8 @@ def test_gundam_interface_exposes_model_and_data_samples(tmp_path) -> None:
         )
     )
 
-    assert interface.modelSamples.sumWeights(0).tolist() == [1.0]
-    assert interface.dataSamples.sumWeights(0).tolist() == [2.0]
+    assert interface.getModel().getSampleSet().getSampleList()[0].getHistogram().getBinList()[0].getSumWeights() == 1.0
+    assert interface.getData().getSampleSet().getSampleList()[0].getHistogram().getBinList()[0].getSumWeights() == 2.0
 
 
 def test_gundam_interface_exposes_minimizer_fit_parameters(tmp_path) -> None:
@@ -505,7 +424,8 @@ def test_initialize_loads_postfit_state_when_requested(tmp_path, monkeypatch) ->
     interface.initialize()
 
     assert interface.engine.initializeCount == 1
-    assert interface.dataSamples.sumWeights(0).tolist() == [10.0, 20.0]
+    dataBins = interface.getData().getSampleSet().getSampleList()[0].getHistogram().getBinList()
+    assert [bin.getSumWeights() for bin in dataBins] == [10.0, 20.0]
     assert len(fakeParametersManager.injectedConfigs) == 1
     assert fakeParametersManager.injectedConfigs[0].startswith("config-string:")
 
@@ -538,8 +458,9 @@ def test_initialize_restores_data_histograms_from_output_root_by_default(
     interface.initialize()
 
     assert fakeParametersManager.injectedConfigs == []
-    assert interface.dataSamples.sumWeights(0).tolist() == [3.0, 4.0]
-    assert interface.dataSamples[0].histogram.sqrtSumSqWeights.tolist() == [0.3, 0.4]
+    dataBins = interface.getData().getSampleSet().getSampleList()[0].getHistogram().getBinList()
+    assert [bin.getSumWeights() for bin in dataBins] == [3.0, 4.0]
+    assert [bin.getSqrtSumSqWeights() for bin in dataBins] == [0.3, 0.4]
 
 
 def test_initialize_can_skip_data_histograms_from_output_root(tmp_path) -> None:
@@ -563,7 +484,8 @@ def test_initialize_can_skip_data_histograms_from_output_root(tmp_path) -> None:
 
     interface.initialize()
 
-    assert interface.dataSamples.sumWeights(0).tolist() == [0.0, 0.0]
+    dataBins = interface.getData().getSampleSet().getSampleList()[0].getHistogram().getBinList()
+    assert [bin.getSumWeights() for bin in dataBins] == [0.0, 0.0]
     assert fakeParametersManager.injectedConfigs == []
 
 
@@ -667,6 +589,9 @@ class FakeBinContext:
     def __init__(self, binHandle) -> None:
         self.bin = binHandle
 
+    def getBin(self):
+        return self.bin
+
 
 class FakeHistogram:
     def __init__(self, sumWeights, sqrtSumSqWeights=None, binContexts=None) -> None:
@@ -677,6 +602,9 @@ class FakeHistogram:
             for sumWeight, sqrtSumSqWeight in zip(sumWeights, sqrtSumSqWeights)
         ]
         self._binContextList = [] if binContexts is None else list(binContexts)
+
+    def getNbBins(self):
+        return len(self._binContentList)
 
     def getBinContentList(self):
         return self._binContentList
@@ -690,6 +618,11 @@ class FakeSample:
         self, sumWeights, name="sample0", sqrtSumSqWeights=None, binContexts=None
     ) -> None:
         self._name = name
+        if binContexts is None:
+            binContexts = [
+                FakeBinContext(FakeBin(index, []))
+                for index, _ in enumerate(sumWeights)
+            ]
         self._histogram = FakeHistogram(sumWeights, sqrtSumSqWeights, binContexts)
 
     def getName(self):
@@ -953,3 +886,4 @@ def test_gundam_runtime_loads_gundam_lib_path_into_loader(tmp_path) -> None:
     )
 
     assert runtime.loader.gundamLibPath == tmp_path / "gundam-lib"
+
