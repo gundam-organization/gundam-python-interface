@@ -7,8 +7,8 @@ from typing import Any
 
 import numpy as np
 
-from .internal.propagator import PropagatorView
 from .internal.minimizer import GundamMinimizer
+from .internal.propagator import PropagatorView
 from .internal.root_state import GundamRootStateReader
 from .internal.utils import preservedWorkingDirectory
 from .runtime import GundamRuntime

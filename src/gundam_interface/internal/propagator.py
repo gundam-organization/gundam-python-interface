@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from .dial import EventDialCacheView
 from .parameters import ParametersManagerView
 from .samples import SampleSetView
-from .dial import EventDialCacheView
 
 
 @dataclass(slots=True)

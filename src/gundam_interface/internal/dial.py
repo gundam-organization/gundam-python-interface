@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .samples import EventView
 from .parameters import ParameterView
+from .samples import EventView
 
 
 @dataclass(slots=True, init=False)

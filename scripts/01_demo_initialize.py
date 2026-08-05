@@ -1,3 +1,4 @@
+import importlib
 import sys
 from pathlib import Path
 
@@ -24,7 +25,10 @@ if srcPath.exists() and str(srcPath) not in sys.path:
     sys.path.insert(0, str(srcPath))
 # ~ end of this block
 
-from gundam_interface import GundamInterface, GundamLoader, GundamRuntime  # noqa: E402
+gundam_interface = importlib.import_module("gundam_interface")
+GundamInterface = gundam_interface.GundamInterface
+GundamLoader = gundam_interface.GundamLoader
+GundamRuntime = gundam_interface.GundamRuntime
 
 np.random.seed(seed)
 
