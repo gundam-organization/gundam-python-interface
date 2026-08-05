@@ -10,26 +10,25 @@ jobs:
   test:
     name: Test with GUNDAM engine
     runs-on: ubuntu-latest
-    container:
-      image: nadrino/gundam:latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Verify GUNDAM Python bindings
-        run: python -c "import GUNDAM; print('GUNDAM loaded from', GUNDAM.__file__)"
-
-      - name: Install package
+      - name: Run tests with the GUNDAM Docker image
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
-
-      - name: Run tests
-        run: python -m pytest -v
-
-      - name: Run ruff
-        run: python -m ruff check .
+          docker run --rm \
+            --platform linux/amd64 \
+            --volume "${GITHUB_WORKSPACE}:/workspace" \
+            --workdir /workspace \
+            nadrino/gundam:latest \
+            bash -lc '
+              python -c "import GUNDAM; print(\"GUNDAM loaded from\", GUNDAM.__file__)"
+              python -m pip install --upgrade pip
+              python -m pip install -e ".[dev]"
+              python -m pytest -v
+              python -m ruff check .
+            '
 
   build:
     name: Build package
