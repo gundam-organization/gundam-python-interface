@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .internal.logging import GundamLogRedirector
+from .internal.logging import GundamLogRedirector, suppressNativeStdout
 from .loader import GundamLoader
 
 
@@ -149,11 +149,13 @@ class GundamRuntime:
             )
 
     def setQuiet(self, quiet: bool) -> None:
-        """Mute native stdout/stderr during interface operations.
+        """Mute native stdout during interface operations, keeping stderr visible.
 
         Takes effect on the next configure, initialize, or evaluation call.
-        Quiet mode discards output via os.devnull, bypassing both temporary and
+        Quiet mode discards stdout via os.devnull, bypassing both temporary and
         explicit log files. Disabling it restores the usual logging policy.
+        Messages written to stderr (including std::cerr) remain visible;
+        error messages written to stdout are still suppressed.
         Redirection affects the whole process during each operation; direct
         calls to engine objects or returned views are not wrapped automatically.
         This is a session setting and is not included in runtime serialization.
@@ -169,7 +171,7 @@ class GundamRuntime:
     ) -> AbstractContextManager[None]:
         """Apply quiet mode or, when requested, the usual log redirection."""
         if self._quiet:
-            return GundamLogRedirector().redirectNativeOutput(os.devnull, stream=False)
+            return suppressNativeStdout()
         if redirect:
             return self.logRedirector.redirect(logPath, prefix=prefix)
         return nullcontext()

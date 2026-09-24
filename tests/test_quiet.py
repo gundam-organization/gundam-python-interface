@@ -43,12 +43,15 @@ def test_quiet_restores_output_after_exception_and_nested_context(runtime, capfd
     ctypes.CDLL(None).fflush(None)
     captured = capfd.readouterr()
     assert captured.out == "native stdout\nbuffered native stdout\n" * 2
-    assert captured.err == "native stderr\n" * 2
+    assert captured.err == "native stderr\n" * 5
 
 
-@pytest.mark.parametrize("operation", ["configure", "initialize", "evaluateLlh"])
+@pytest.mark.parametrize(
+    ("operation", "messageCount"),
+    [("configure", 4), ("initialize", 4), ("evaluateLlh", 1)],
+)
 def test_interface_quiet_can_be_toggled(
-    runtime, operation, monkeypatch, tmp_path, capfd,
+    runtime, operation, messageCount, monkeypatch, tmp_path, capfd,
 ):
     interface = GundamInterface(runtime)
     likelihood = SimpleNamespace(
@@ -92,7 +95,7 @@ def test_interface_quiet_can_be_toggled(
 
     runtime.setQuiet(True)
     result = getattr(interface, operation)(**kwargs)
-    assert capfd.readouterr() == ("", "")
+    assert capfd.readouterr() == ("", "native stderr\n" * messageCount)
     assert not logPath.exists()
     if operation == "evaluateLlh":
         assert result == 12.5
@@ -123,9 +126,20 @@ def test_quiet_initialize_failure_restores_output(runtime, monkeypatch, capfd):
         interface.initialize()
     assert os.getcwd() == originalDirectory
     assert not interface._isInitialized
-    assert capfd.readouterr() == ("", "")
+    assert capfd.readouterr() == ("", "native stderr\n" * 2)
     emitNativeOutput()
     ctypes.CDLL(None).fflush(None)
     captured = capfd.readouterr()
     assert "native stdout" in captured.out
     assert "native stderr" in captured.err
+
+
+def test_regular_log_redirection_still_captures_stderr(runtime, tmp_path, capfd):
+    logPath = tmp_path / "native.log"
+    with runtime.logRedirector.redirectNativeOutput(logPath):
+        emitNativeOutput()
+    assert capfd.readouterr() == ("", "")
+    log = logPath.read_text()
+    assert "native stdout\n" in log
+    assert "buffered native stdout\n" in log
+    assert "native stderr\n" in log

@@ -166,6 +166,28 @@ class GundamLogRedirector:
                 logPath.unlink(missing_ok=True)
 
 
+@contextmanager
+def suppressNativeStdout() -> Iterator[None]:
+    """Discard native stdout for the block, leaving stderr untouched."""
+    libc = ctypes.CDLL(None)
+    sys.stdout.flush()
+    libc.fflush(None)
+    stdoutFd = os.dup(1)
+    try:
+        with open(os.devnull, "wb", buffering=0) as nullOutput:
+            os.dup2(nullOutput.fileno(), 1)
+            yield
+    finally:
+        try:
+            sys.stdout.flush()
+            libc.fflush(None)
+        finally:
+            try:
+                os.dup2(stdoutFd, 1)
+            finally:
+                os.close(stdoutFd)
+
+
 def redirectNativeOutput(
     logPath: str | os.PathLike[str],
     *,
