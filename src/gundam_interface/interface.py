@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -52,7 +51,7 @@ class GundamInterface:
         return PropagatorView(handle=self.engine.getLikelihoodInterface().getDataPropagator())
 
     def configure(self, validatePaths: bool = True) -> None:
-        with preservedWorkingDirectory():
+        with preservedWorkingDirectory(), self._runtime._outputContext():
             if validatePaths:
                 self._runtime.validatePaths()
 
@@ -72,19 +71,14 @@ class GundamInterface:
         self,
         logPath: str | os.PathLike[str] | None = None,
     ) -> None:
-        with preservedWorkingDirectory():
+        with preservedWorkingDirectory(), self._runtime._outputContext(
+            logPath, prefix="gundam_initialize", redirect=True,
+        ):
             self._requireConfigured()
-            if logPath is not None:
-                logPath = Path(logPath).expanduser().resolve()
-            redirectContext = self._runtime.logRedirector.redirect(
-                logPath,
-                prefix="gundam_initialize",
-            )
 
             with self._runtime.runFromWorkingDirectory():
                 self._setLikelihoodDataType()
-                with redirectContext:
-                    self.engine.initialize()
+                self.engine.initialize()
                 self._loadDataHistogramsIfAvailable()
                 self._loadPostFitStateIfRequested()
             self._isInitialized = True
@@ -94,7 +88,7 @@ class GundamInterface:
         physicalValues: np.ndarray | None = None,
         logPath: str | os.PathLike[str] | None = None,
     ) -> float:
-        with preservedWorkingDirectory():
+        with preservedWorkingDirectory(), self._runtime._outputContext():
             self._requireInitialized()
             if physicalValues is not None:
                 self.getModel().getParametersManager().setParameterValues(physicalValues)
@@ -114,12 +108,12 @@ class GundamInterface:
         The GUNDAM binding only exposes ``throwPostfitParameters()`` as a state
         update on the minimizer. This method wraps that operation into a simple
         batch interface. ``logPath`` is accepted for backward compatibility but
-        is intentionally ignored: native output is not redirected in this loop.
+        is intentionally ignored. Runtime quiet mode still mutes native output.
         """
         from tqdm.auto import tqdm
 
         del logPath
-        with preservedWorkingDirectory():
+        with preservedWorkingDirectory(), self._runtime._outputContext():
             self._requireInitialized()
             if nThrows < 1:
                 raise ValueError("nThrows must be >= 1")

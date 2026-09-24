@@ -6,7 +6,7 @@ import json
 import os
 import tempfile
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -89,6 +89,7 @@ class GundamRuntime:
         init=False,
         default_factory=GundamLogRedirector,
     )
+    _quiet: bool = field(init=False, default=False, repr=False)
     _gundamModule: Any | None = field(
         init=False,
         default=None,
@@ -146,6 +147,32 @@ class GundamRuntime:
             raise ValueError(
                 "randomSeed must be provided for Toy data when loadDataHistograms is False"
             )
+
+    def setQuiet(self, quiet: bool) -> None:
+        """Mute native stdout/stderr during interface operations.
+
+        Takes effect on the next configure, initialize, or evaluation call.
+        Quiet mode discards output via os.devnull, bypassing both temporary and
+        explicit log files. Disabling it restores the usual logging policy.
+        Redirection affects the whole process during each operation; direct
+        calls to engine objects or returned views are not wrapped automatically.
+        This is a session setting and is not included in runtime serialization.
+        """
+        self._quiet = bool(quiet)
+
+    def _outputContext(
+        self,
+        logPath: str | os.PathLike[str] | None = None,
+        *,
+        prefix: str = "gundam",
+        redirect: bool = False,
+    ) -> AbstractContextManager[None]:
+        """Apply quiet mode or, when requested, the usual log redirection."""
+        if self._quiet:
+            return GundamLogRedirector().redirectNativeOutput(os.devnull, stream=False)
+        if redirect:
+            return self.logRedirector.redirect(logPath, prefix=prefix)
+        return nullcontext()
 
     @classmethod
     def fromDict(cls, data: dict[str, Any]) -> GundamRuntime:
