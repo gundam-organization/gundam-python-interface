@@ -32,25 +32,6 @@ import gundam_interface
 print(gundam_interface.__version__)
 ```
 
-To suppress native GUNDAM output during interface operations:
-
-```python
-runtime.setQuiet(True)
-interface = gundam_interface.GundamInterface(runtime)
-interface.configure()
-interface.initialize()
-
-runtime.setQuiet(False)  # Restore the usual output policy for subsequent calls.
-```
-
-Quiet mode covers configuration, initialization, likelihood evaluation, and
-post-fit throw evaluation. It redirects native stdout/stderr to `os.devnull`
-only during these operations, bypassing temporary and explicit log files.
-Exceptions still propagate, and output is restored even if an operation fails.
-The redirection affects the whole process while active, so concurrent output
-may also be suppressed. Direct calls to `interface.engine` or returned views
-are not automatically muted. This setting is not serialized with the runtime.
-
 ## Build
 
 ```bash
