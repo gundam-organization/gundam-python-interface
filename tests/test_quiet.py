@@ -7,6 +7,14 @@ import pytest
 from gundam_interface import GundamInterface, GundamLoader, GundamRuntime
 
 
+@pytest.fixture(autouse=True)
+def clearPendingNativeOutput(capfd):
+    # Integration tests may leave native logs buffered across test boundaries.
+    # Flush before clearing capture so they cannot leak into these assertions.
+    ctypes.CDLL(None).fflush(None)
+    capfd.readouterr()
+
+
 @pytest.fixture
 def runtime(tmp_path):
     return GundamRuntime(
