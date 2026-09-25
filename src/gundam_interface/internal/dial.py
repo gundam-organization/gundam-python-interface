@@ -45,3 +45,6 @@ class EventDialCacheView:
     def getDialListAffecting(self, parameter_: ParameterView) -> list[DialView]:
         idxList = list(self.handle.getDialIndicesAffecting(parameter_.handle))
         return [DialView(self.handle.dialResponseCacheList[idx]) for idx in idxList]
+
+    def getSummary(self) -> str:
+        return str(self.handle.getSummary())
