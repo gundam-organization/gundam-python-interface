@@ -54,6 +54,38 @@ class HistogramView:
 
 
 @dataclass(slots=True)
+class VariableCollectionView:
+    """Light Python-side view over a GUNDAM VariableCollection handle."""
+
+    handle: Any
+
+    def __getitem__(self, key: str | int) -> int | float:
+        idx = -1
+        if isinstance(key, int):
+            idx = key
+        if isinstance(key, str):
+            idx = self.handle.findVarIndex(key, False)
+
+        if idx == -1:
+            raise NotImplementedError("Invalid key: ", key)
+
+        varHolder = self.handle.getVarList()[idx]
+
+        return varHolder.getValue()
+
+    def toDict(self) -> dict[str, int | float]:
+        """Return variable names and their current values as a dictionary."""
+        return {
+            name: self[idx]
+            for idx, name in enumerate(self.handle.getNameList())
+        }
+
+    def __str__(self) -> str:
+        return str(self.toDict())
+
+
+
+@dataclass(slots=True)
 class EventView:
     """Light Python-side view over a GUNDAM Event handle."""
 
@@ -110,7 +142,7 @@ class EventView:
         return EventView.Weights(self.handle.getWeights())
 
     def getVariables(self) -> Any:
-        return self.handle.getVariables()
+        return VariableCollectionView(self.handle.getVariables())
 
     def getSize(self) -> int:
         return int(self.handle.getSize())
