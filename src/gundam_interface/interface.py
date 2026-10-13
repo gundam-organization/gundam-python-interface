@@ -7,6 +7,7 @@ from typing import Any
 import numpy as np
 
 from .internal.minimizer import GundamMinimizer
+from .internal.likelihood import LikelihoodInterfaceView
 from .internal.propagator import PropagatorView
 from .internal.root_state import GundamRootStateReader
 from .internal.utils import preservedWorkingDirectory
@@ -41,6 +42,10 @@ class GundamInterface:
     def getMinimizer(self) -> GundamMinimizer:
         self._requireConfigured()
         return GundamMinimizer(_handle=self.engine.getMinimizer())
+
+    def getLikelihoodInterface(self):
+        self._requireConfigured()
+        return LikelihoodInterfaceView(handle=self.engine.getLikelihoodInterface())
 
     def getModel(self) -> PropagatorView:
         self._requireConfigured()

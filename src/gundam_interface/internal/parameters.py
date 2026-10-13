@@ -30,6 +30,9 @@ class ParameterView:
     def getPrior(self) -> float:
         return float(self.handle.getPriorValue())
 
+    def getStdDev(self) -> float:
+        return float(self.handle.getStdDevValue())
+
     def getThrow(self) -> float:
         return float(self.handle.getThrowValue())
 
@@ -48,6 +51,9 @@ class ParameterSetView:
     """Light Python-side view over a GUNDAM ParameterSet handle."""
 
     handle: Any
+
+    def getName(self) -> str:
+        return str(self.handle.getName())
 
     def isEnableEigenDecomp(self) -> bool:
         return bool(self.handle.isEnableEigenDecomp())
