@@ -162,6 +162,26 @@ class GundamRuntime:
         """
         self._quiet = bool(quiet)
 
+    @contextmanager
+    def quiet(self) -> Iterator[None]:
+        """Enable quiet mode for this block, then restore the previous setting.
+
+        Uses the same output policy as ``setQuiet(True)``. Nested blocks are
+        supported, and the previous setting is restored even if an exception
+        is raised.
+
+        Example::
+
+            with runtime.quiet():
+                gundam.configure()
+        """
+        previousQuiet = self._quiet
+        self.setQuiet(True)
+        try:
+            yield
+        finally:
+            self.setQuiet(previousQuiet)
+
     def _outputContext(
         self,
         logPath: str | os.PathLike[str] | None = None,

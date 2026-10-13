@@ -29,6 +29,39 @@ def emitNativeOutput(*args):
     ctypes.CDLL(None).puts(b"buffered native stdout")
 
 
+@pytest.mark.parametrize("initialQuiet", [False, True])
+@pytest.mark.parametrize("raiseError", [False, True])
+def test_quiet_context_restores_previous_setting(runtime, capfd, initialQuiet, raiseError):
+    runtime.setQuiet(initialQuiet)
+
+    def runQuietBlock():
+        with runtime.quiet():
+            with runtime._outputContext():
+                emitNativeOutput()
+            with runtime.quiet():
+                with runtime._outputContext():
+                    emitNativeOutput()
+            with runtime._outputContext():
+                emitNativeOutput()
+            if raiseError:
+                raise RuntimeError("quiet block failed")
+
+    if raiseError:
+        with pytest.raises(RuntimeError, match="quiet block failed"):
+            runQuietBlock()
+    else:
+        runQuietBlock()
+
+    assert capfd.readouterr() == ("", "native stderr\n" * 3)
+    with runtime._outputContext():
+        emitNativeOutput()
+    ctypes.CDLL(None).fflush(None)
+    captured = capfd.readouterr()
+    expectedOutput = "" if initialQuiet else "native stdout\nbuffered native stdout\n"
+    assert captured.out == expectedOutput
+    assert captured.err == "native stderr\n"
+
+
 def test_quiet_restores_output_after_exception_and_nested_context(runtime, capfd):
     runtime.setQuiet(True)
     emitNativeOutput()
