@@ -12,6 +12,9 @@ from .samples import SampleSetView
 class PropagatorView:
     handle: Any
 
+    def updateEventBinning(self) -> None:
+        self.handle.updateEventBinning()
+
     def getParametersManager(self) -> ParametersManagerView:
         return ParametersManagerView(handle=self.handle.getParametersManager())
 

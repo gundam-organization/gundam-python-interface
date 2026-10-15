@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from operator import index as integerIndex
 from typing import Any
 
 
@@ -60,18 +61,20 @@ class VariableCollectionView:
     handle: Any
 
     def __getitem__(self, key: str | int) -> int | float:
-        idx = -1
-        if isinstance(key, int):
-            idx = key
+        return self._getVariableHolder(key).getValue()
+
+    def __setitem__(self, key: str | int, value: float) -> None:
+        """Update a stored scalar, preserving its C++ type and cached value."""
+        self._getVariableHolder(key).setValue(value)
+
+    def _getVariableHolder(self, key: str | int) -> Any:
         if isinstance(key, str):
             idx = self.handle.findVarIndex(key, False)
-
-        if idx == -1:
-            raise NotImplementedError("Invalid key: ", key)
-
-        varHolder = self.handle.getVarList()[idx]
-
-        return varHolder.getValue()
+            if idx == -1:
+                raise KeyError(key)
+        else:
+            idx = integerIndex(key)
+        return self.handle.getVarList()[idx]
 
     def toDict(self) -> dict[str, int | float]:
         """Return variable names and their current values as a dictionary."""
@@ -141,7 +144,7 @@ class EventView:
     def getWeights(self) -> EventView.Weights:
         return EventView.Weights(self.handle.getWeights())
 
-    def getVariables(self) -> Any:
+    def getVariables(self) -> VariableCollectionView:
         return VariableCollectionView(self.handle.getVariables())
 
     def getSize(self) -> int:
@@ -159,6 +162,26 @@ class SampleView:
     """Light Python-side view over a GUNDAM Sample handle."""
 
     handle: Any
+
+    def setUseDynamicBinning(self, useDynamicBinning: bool) -> None:
+        """Enable before initialization to retain unbinned events and binning variables."""
+        self.handle.setUseDynamicBinning(useDynamicBinning)
+
+    def isUseDynamicBinning(self) -> bool:
+        return bool(self.handle.isUseDynamicBinning())
+
+    def updateEventBinning(self) -> None:
+        """Reassign this sample's events and rebuild its bin event lists.
+
+        Only samples with dynamic binning enabled are updated. For repeated
+        updates, prefer PropagatorView.updateEventBinning(), which reuses its pool.
+        For model samples, evaluateLlh() afterwards refills the histogram.
+        Event-to-dial associations are preserved.
+        """
+        self.handle.updateEventBinning()
+
+    def getNbBinnedEvents(self) -> int:
+        return int(self.handle.getNbBinnedEvents())
 
     def getName(self) -> str:
         return str(self.handle.getName())

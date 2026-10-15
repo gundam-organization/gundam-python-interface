@@ -4,7 +4,7 @@ This test suite checks the GUNDAM Python interface at two levels:
 
 - interface unit tests using mock objects, in `test_package.py`;
 - integration tests using the real GUNDAM Python bindings, in the numbered
-  `test_00_...` through `test_04_...` files.
+  `test_00_...` through `test_05_...` files.
 
 ## Requirements
 
@@ -54,11 +54,14 @@ The numbered files describe the workflow in order:
 2. `test_01_initialize_interface.py` configures and initializes the interface;
 3. `test_02_evaluate_likelihood.py` evaluates the likelihood;
 4. `test_03_access_samples.py` checks access to model and data samples;
-5. `test_04_access_histogram.py` checks histogram access.
+5. `test_04_access_histogram.py` checks histogram access;
+6. `test_05_dynamic_binning.py` changes event variables and checks bin migrations,
+   weighted histogram contents, and errors with one and four CPU threads.
 
 The inputs are created in pytest's temporary directory and do not modify the
 repository. Shared fixtures are defined in `conftest.py` and reuse one ROOT/YAML
-input pair and one initialized interface instance for the test session.
+input pair and one initialized interface instance for the first five numbered files.
+The dynamic binning tests create separate inputs and interfaces.
 
 ## Running part of the suite
 
