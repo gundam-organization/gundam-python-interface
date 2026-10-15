@@ -86,15 +86,15 @@ def test_modify_event_variables_and_rebin(tmp_path, request, threads):
     events[2].getVariables()[xIndex] = 0.0
     # Editing variables alone does not rebin events during evaluation.
     check([0, 1, -1], [1, 2], [1, 2])
-    model.updateEventBinning()
+    model.updateEventSampleBinning()
     check([1, 1, 1], [0, 6], [0, math.sqrt(14)])
 
     events[1].getVariables()["X"] = 1.0  # Upper edge is excluded.
-    sample.updateEventBinning()
+    sample.updateEventSampleBinning()
     check([1, -1, 1], [0, 4], [0, math.sqrt(10)])
 
     for event, value in zip(events, [-0.5, 0.5, 2.0]):
         event.getVariables()["X"] = value
     for _ in range(2):
-        model.updateEventBinning()
+        model.updateEventSampleBinning()
         check([0, 1, -1], [1, 2], [1, 2])

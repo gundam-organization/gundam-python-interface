@@ -164,20 +164,12 @@ class SampleView:
     handle: Any
 
     def setUseDynamicBinning(self, useDynamicBinning: bool) -> None:
-        """Enable before initialization to retain unbinned events and binning variables."""
         self.handle.setUseDynamicBinning(useDynamicBinning)
 
     def isUseDynamicBinning(self) -> bool:
         return bool(self.handle.isUseDynamicBinning())
 
     def updateEventBinning(self) -> None:
-        """Reassign this sample's events and rebuild its bin event lists.
-
-        Only samples with dynamic binning enabled are updated. For repeated
-        updates, prefer PropagatorView.updateEventBinning(), which reuses its pool.
-        For model samples, evaluateLlh() afterwards refills the histogram.
-        Event-to-dial associations are preserved.
-        """
         self.handle.updateEventBinning()
 
     def getNbBinnedEvents(self) -> int:

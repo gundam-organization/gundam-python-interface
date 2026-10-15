@@ -49,7 +49,7 @@ event = sample.getEventList()[0]
 variables = event.getVariables()
 variables["X"] = 1.2  # Access by variable name or integer index.
 
-model.updateEventBinning()  # Reuses the propagator's thread pool.
+model.updateEventSampleBinning()  # Reuses the propagator's thread pool.
 llh = interface.evaluateLlh()  # Refills histograms and evaluates the likelihood.
 ```
 
@@ -59,12 +59,12 @@ samples with dynamic binning enabled. Events outside all bins keep index `-1`
 and remain available for later migrations. `sample.getNbBinnedEvents()` returns
 the number currently assigned to a bin.
 
-`sample.updateEventBinning()` updates a single sample. Use the propagator method
+`sample.updateEventSampleBinning()` updates a single sample. Use the propagator method
 for repeated updates to reuse its thread pool. `evaluateLlh()` refills the model
 histograms. Event-to-dial associations remain unchanged by these operations.
 
 These methods require GUNDAM bindings exposing `VariableHolder.setValue()`,
-`Sample.setUseDynamicBinning()`, and `updateEventBinning()` on samples and propagators.
+`Sample.setUseDynamicBinning()`, and `updateEventSampleBinning()` on samples and propagators.
 
 ## Build
 
