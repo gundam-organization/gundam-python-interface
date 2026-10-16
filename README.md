@@ -32,6 +32,40 @@ import gundam_interface
 print(gundam_interface.__version__)
 ```
 
+### Modify event variables and rebin
+
+Enable dynamic binning on the desired samples after `configure()` and before
+`initialize()`. GUNDAM then retains events outside the histogram and stores the
+variables needed to assign bins.
+
+```python
+interface.configure()
+model = interface.getModel()
+sample = model.getSampleSet().getSampleList()[0]
+sample.setUseDynamicBinning(True)
+interface.initialize()
+
+event = sample.getEventList()[0]
+variables = event.getVariables()
+variables["X"] = 1.2  # Access by variable name or integer index.
+
+model.updateEventSampleBinning()  # Reuses the propagator's thread pool.
+llh = interface.evaluateLlh()  # Refills histograms and evaluates the likelihood.
+```
+
+Assignments preserve the stored C++ numeric type and refresh its cached value.
+Assign integers to integer variables. Rebinning is explicit and updates only
+samples with dynamic binning enabled. Events outside all bins keep index `-1`
+and remain available for later migrations. `sample.getNbBinnedEvents()` returns
+the number currently assigned to a bin.
+
+`sample.updateEventSampleBinning()` updates a single sample. Use the propagator method
+for repeated updates to reuse its thread pool. `evaluateLlh()` refills the model
+histograms. Event-to-dial associations remain unchanged by these operations.
+
+These methods require GUNDAM bindings exposing `VariableHolder.setValue()`,
+`Sample.setUseDynamicBinning()`, and `updateEventSampleBinning()` on samples and propagators.
+
 ## Build
 
 ```bash
