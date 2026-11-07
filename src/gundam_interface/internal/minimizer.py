@@ -20,3 +20,37 @@ class GundamMinimizer:
 
     def throwPostfitParameters(self) -> None:
         self._handle.throwPostfitParameters()
+
+    def getMinimizerStatus(self) -> int:
+        return self._handle.getMinimizerStatus()
+
+    def isRootMinimizer(self) -> bool:
+        """
+        Whether the C++ handle is a RootMinimizer or one of
+        its subclasses.
+        """
+        return self._handle.isRootMinimizer()
+
+    def _requireRootMinimizer(self) -> None:
+        if not self.isRootMinimizer():
+            raise TypeError(
+                "This method requires a RootMinimizer; "
+                f"got {type(self._handle).__name__}."
+            )
+
+    def updateFitParameterSettings(self) -> None:
+        """Sync ROOT variables with current parameter values, steps, limits and fixed states."""
+        self._requireRootMinimizer()
+        self._handle.updateFitParameterSettings()
+
+    def getFunctionPrecision(self) -> float:
+        self._requireRootMinimizer()
+        return self._handle.getFunctionPrecision()
+
+    def hasConverged(self) -> bool:
+        self._requireRootMinimizer()
+        return self._handle.hasConverged()
+
+    def isMinimizeDone(self) -> bool:
+        self._requireRootMinimizer()
+        return self._handle.isMinimizeDone()

@@ -31,11 +31,5 @@ class LikelihoodInterfaceView:
     def propagateAndEvalLikelihood(self):
         self.handle.propagateAndEvalLikelihood()
 
-    def throwStatErrors(self, propagator_: PropagatorView):
-        self.handle.throwStatErrors(propagator_.handle)
-
-    def throwToyParameters(self, propagator_: PropagatorView):
-        self.handle.throwToyParameters(propagator_.handle)
-
     def setCurrentParameterValuesAsPrior(self):
         self.handle.setCurrentParameterValuesAsPrior()

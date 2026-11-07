@@ -23,3 +23,9 @@ class PropagatorView:
 
     def getDialCacheList(self) -> list[EventDialCacheView]:
         return [EventDialCacheView(elm) for elm in self.handle.getEventDialCache().getCache()]
+
+    def throwStatErrors(self) -> None:
+        self.handle.throwStatErrors()
+
+    def throwToyParameters(self) -> None:
+        self.handle.throwToyParameters()
