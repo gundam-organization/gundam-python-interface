@@ -45,6 +45,9 @@ class ParameterView:
     def setValue(self, value: float) -> None:
         self.handle.setParameterValue(float(value), True)
 
+    def setIsFixed(self, isFixed: bool) -> None:
+        self.handle.setIsFixed(bool(isFixed))
+
 
 @dataclass(slots=True)
 class ParameterSetView:

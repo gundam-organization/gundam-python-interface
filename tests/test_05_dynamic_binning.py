@@ -90,7 +90,7 @@ def test_modify_event_variables_and_rebin(tmp_path, request, threads):
     check([1, 1, 1], [0, 6], [0, math.sqrt(14)])
 
     events[1].getVariables()["X"] = 1.0  # Upper edge is excluded.
-    sample.updateEventSampleBinning()
+    sample.updateEventBinning()
     check([1, -1, 1], [0, 4], [0, math.sqrt(10)])
 
     for event, value in zip(events, [-0.5, 0.5, 2.0]):
