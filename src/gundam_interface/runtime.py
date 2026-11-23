@@ -23,7 +23,7 @@ class GundamRuntime:
     concrete GUNDAM engine instance. It keeps together the loader used to import
     the GUNDAM Python bindings, the runtime working directory, the GUNDAM
     configuration source, override files, data mode, thread count, and optional
-    random seed.
+    random seed and dataset loading fraction.
 
     The runtime accepts a configuration file path relative to ``workDir``, an
     already-built JSON configuration string, or a GUNDAM ROOT output file.
@@ -71,6 +71,10 @@ class GundamRuntime:
         ``"RealData"``. Defaults to ``"Asimov"``.
     randomSeed:
         Optional non-negative seed applied to the GUNDAM engine.
+    loadDatasetFraction:
+        Optional fraction of entries to read from each dataset input tree,
+        between 0 and 1 inclusive. Defaults to ``None``, which uses the
+        GUNDAM configuration.
     """
 
     loader: GundamLoader
@@ -85,11 +89,13 @@ class GundamRuntime:
     forceAsimov: bool | None = None
     dataType: str | None = None
     randomSeed: int | None = None
+    loadDatasetFraction: float | None = None
     logRedirector: GundamLogRedirector = field(
         init=False,
         default_factory=GundamLogRedirector,
     )
     _quiet: bool = field(init=False, default=False, repr=False)
+    _outputLogPaths: tuple[Path, ...] = field(init=False, default=(), repr=False)
     _gundamModule: Any | None = field(
         init=False,
         default=None,
@@ -116,6 +122,10 @@ class GundamRuntime:
             self.randomSeed = int(self.randomSeed)
             if self.randomSeed < 0:
                 raise ValueError("randomSeed must be >= 0")
+        if self.loadDatasetFraction is not None:
+            self.loadDatasetFraction = float(self.loadDatasetFraction)
+            if not 0 <= self.loadDatasetFraction <= 1:
+                raise ValueError("loadDatasetFraction must be between 0 and 1")
         if self.configPath is not None and self.configJsonString is not None:
             raise ValueError("configPath and configJsonString are mutually exclusive")
         if (
@@ -182,6 +192,31 @@ class GundamRuntime:
         finally:
             self.setQuiet(previousQuiet)
 
+    @contextmanager
+    def redirectOutput(
+        self,
+        logPath: str | os.PathLike[str],
+        *,
+        stream: bool | None = None,
+    ) -> Iterator[None]:
+        """Append native stdout and stderr to a log file for this block.
+
+        Set ``stream=True`` to also display the output live. By default, use
+        the setting on ``logRedirector``. Redirection affects the whole process
+        for the duration of the block.
+        """
+        path = Path(logPath).expanduser().resolve()
+        previousPaths = self._outputLogPaths
+        if path in previousPaths:
+            # An active stream can already forward this file's output.
+            stream = False
+        with self.logRedirector.redirect(path, stream=stream):
+            self._outputLogPaths = (*previousPaths, path)
+            try:
+                yield
+            finally:
+                self._outputLogPaths = previousPaths
+
     def _outputContext(
         self,
         logPath: str | os.PathLike[str] | None = None,
@@ -192,7 +227,7 @@ class GundamRuntime:
         """Apply quiet mode or, when requested, the usual log redirection."""
         if self._quiet:
             return suppressNativeStdout()
-        if redirect:
+        if redirect and not self._outputLogPaths:
             return self.logRedirector.redirect(logPath, prefix=prefix)
         return nullcontext()
 
@@ -216,6 +251,7 @@ class GundamRuntime:
             forceAsimov=data.get("forceAsimov", data.get("useAsimov")),
             dataType=data.get("dataType"),
             randomSeed=data.get("randomSeed", data.get("seed")),
+            loadDatasetFraction=data.get("loadDatasetFraction"),
             loader=GundamLoader.fromDict(
                 data.get("loader")
                 or (
@@ -252,6 +288,8 @@ class GundamRuntime:
         }
         if self.randomSeed is not None:
             data["randomSeed"] = self.randomSeed
+        if self.loadDatasetFraction is not None:
+            data["loadDatasetFraction"] = self.loadDatasetFraction
         if self.outputRootPath is not None:
             data["outputRootPath"] = str(self.outputRootPath)
         if not self.loadDataHistograms:

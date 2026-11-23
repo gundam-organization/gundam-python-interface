@@ -12,6 +12,12 @@ from .samples import SampleSetView
 class PropagatorView:
     handle: Any
 
+    def copyHistBinContentFrom(self, other_: PropagatorView) -> None:
+        self.handle.copyHistBinContentFrom(other_.handle)
+
+    def propagateParameters(self) -> None:
+        self.handle.propagateParameters()
+
     def updateEventSampleBinning(self) -> None:
         self.handle.updateEventSampleBinning()
 

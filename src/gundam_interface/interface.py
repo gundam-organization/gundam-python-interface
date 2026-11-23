@@ -67,6 +67,11 @@ class GundamInterface:
             engine.setConfig(fitterEngineConfig)
             with self._runtime.runFromWorkingDirectory():
                 engine.configure()
+                if self._runtime.loadDatasetFraction is not None:
+                    datasetManager = engine.getLikelihoodInterface().getDatasetManager()
+                    datasetManager.setDebugLoadDatasetFraction(
+                        fraction=self._runtime.loadDatasetFraction,
+                    )
 
             self.engine = engine
             self._isConfigured = True
