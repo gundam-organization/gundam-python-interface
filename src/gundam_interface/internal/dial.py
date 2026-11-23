@@ -21,6 +21,9 @@ class DialView:
     def getDialSummary(self) -> str:
         return str(self.handle.getDialInterface().getSummary())
 
+    def getSourceKnotPositions(self) -> list[float]:
+        return list(self.handle.getDialInterface().getSourceKnotPositions())
+
     def evaluateResponse(self) -> float:
         # we need to update the intput buffer manually
         self.updateInputBuffer()

@@ -32,6 +32,19 @@ import gundam_interface
 print(gundam_interface.__version__)
 ```
 
+### Plot dial response density
+
+Install the plotting dependency with `pip install 'gundam-interface[plot]'`.
+Use an initialized interface and pass the name of an enabled parameter.
+
+```python
+from gundam_interface import DrawingTools
+
+tools = DrawingTools(interface)
+fig, ax = tools.drawDialResponseDensity("HFPW_toHFTwkDial_C_nu_0Graph")
+fig.savefig("dial-response-density.png")
+```
+
 ### Modify event variables and rebin
 
 Enable dynamic binning on the desired samples after `configure()` and before
