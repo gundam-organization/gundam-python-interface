@@ -95,6 +95,7 @@ class GundamRuntime:
         default_factory=GundamLogRedirector,
     )
     _quiet: bool = field(init=False, default=False, repr=False)
+    _outputLogPaths: tuple[Path, ...] = field(init=False, default=(), repr=False)
     _gundamModule: Any | None = field(
         init=False,
         default=None,
@@ -191,6 +192,31 @@ class GundamRuntime:
         finally:
             self.setQuiet(previousQuiet)
 
+    @contextmanager
+    def redirectOutput(
+        self,
+        logPath: str | os.PathLike[str],
+        *,
+        stream: bool | None = None,
+    ) -> Iterator[None]:
+        """Append native stdout and stderr to a log file for this block.
+
+        Set ``stream=True`` to also display the output live. By default, use
+        the setting on ``logRedirector``. Redirection affects the whole process
+        for the duration of the block.
+        """
+        path = Path(logPath).expanduser().resolve()
+        previousPaths = self._outputLogPaths
+        if path in previousPaths:
+            # An active stream can already forward this file's output.
+            stream = False
+        with self.logRedirector.redirect(path, stream=stream):
+            self._outputLogPaths = (*previousPaths, path)
+            try:
+                yield
+            finally:
+                self._outputLogPaths = previousPaths
+
     def _outputContext(
         self,
         logPath: str | os.PathLike[str] | None = None,
@@ -201,7 +227,7 @@ class GundamRuntime:
         """Apply quiet mode or, when requested, the usual log redirection."""
         if self._quiet:
             return suppressNativeStdout()
-        if redirect:
+        if redirect and not self._outputLogPaths:
             return self.logRedirector.redirect(logPath, prefix=prefix)
         return nullcontext()
 

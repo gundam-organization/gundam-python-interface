@@ -176,3 +176,30 @@ def test_regular_log_redirection_still_captures_stderr(runtime, tmp_path, capfd)
     assert "native stdout\n" in log
     assert "buffered native stdout\n" in log
     assert "native stderr\n" in log
+
+
+@pytest.mark.parametrize("stream", [False, True])
+def test_runtime_redirect_output_captures_native_output(
+    runtime, tmp_path, monkeypatch, capfd, stream,
+):
+    logPath = tmp_path / "native.log"
+    otherPath = tmp_path / "initialize.log"
+    monkeypatch.setattr("gundam_interface.internal.logging.isNotebookRuntime", lambda: False)
+    with pytest.raises(RuntimeError, match="block failed"):
+        with runtime.redirectOutput(logPath, stream=stream):
+            emitNativeOutput()
+            with runtime._outputContext(otherPath, redirect=True):
+                emitNativeOutput()
+            raise RuntimeError("block failed")
+
+    log = logPath.read_text()
+    assert log.count("native stderr\n") == 2
+    assert log.count("buffered native stdout\n") == 2
+    assert not otherPath.exists()
+    captured = capfd.readouterr()
+    assert captured.out == (log if stream else "")
+    assert captured.err == ""
+
+    with runtime._outputContext(otherPath, redirect=True):
+        emitNativeOutput()
+    assert "native stderr\n" in otherPath.read_text()
