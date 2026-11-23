@@ -23,7 +23,7 @@ class GundamRuntime:
     concrete GUNDAM engine instance. It keeps together the loader used to import
     the GUNDAM Python bindings, the runtime working directory, the GUNDAM
     configuration source, override files, data mode, thread count, and optional
-    random seed.
+    random seed and dataset loading fraction.
 
     The runtime accepts a configuration file path relative to ``workDir``, an
     already-built JSON configuration string, or a GUNDAM ROOT output file.
@@ -71,6 +71,10 @@ class GundamRuntime:
         ``"RealData"``. Defaults to ``"Asimov"``.
     randomSeed:
         Optional non-negative seed applied to the GUNDAM engine.
+    loadDatasetFraction:
+        Optional fraction of entries to read from each dataset input tree,
+        between 0 and 1 inclusive. Defaults to ``None``, which uses the
+        GUNDAM configuration.
     """
 
     loader: GundamLoader
@@ -85,6 +89,7 @@ class GundamRuntime:
     forceAsimov: bool | None = None
     dataType: str | None = None
     randomSeed: int | None = None
+    loadDatasetFraction: float | None = None
     logRedirector: GundamLogRedirector = field(
         init=False,
         default_factory=GundamLogRedirector,
@@ -116,6 +121,10 @@ class GundamRuntime:
             self.randomSeed = int(self.randomSeed)
             if self.randomSeed < 0:
                 raise ValueError("randomSeed must be >= 0")
+        if self.loadDatasetFraction is not None:
+            self.loadDatasetFraction = float(self.loadDatasetFraction)
+            if not 0 <= self.loadDatasetFraction <= 1:
+                raise ValueError("loadDatasetFraction must be between 0 and 1")
         if self.configPath is not None and self.configJsonString is not None:
             raise ValueError("configPath and configJsonString are mutually exclusive")
         if (
@@ -216,6 +225,7 @@ class GundamRuntime:
             forceAsimov=data.get("forceAsimov", data.get("useAsimov")),
             dataType=data.get("dataType"),
             randomSeed=data.get("randomSeed", data.get("seed")),
+            loadDatasetFraction=data.get("loadDatasetFraction"),
             loader=GundamLoader.fromDict(
                 data.get("loader")
                 or (
@@ -252,6 +262,8 @@ class GundamRuntime:
         }
         if self.randomSeed is not None:
             data["randomSeed"] = self.randomSeed
+        if self.loadDatasetFraction is not None:
+            data["loadDatasetFraction"] = self.loadDatasetFraction
         if self.outputRootPath is not None:
             data["outputRootPath"] = str(self.outputRootPath)
         if not self.loadDataHistograms:

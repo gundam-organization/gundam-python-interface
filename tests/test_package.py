@@ -2,6 +2,7 @@ import sys
 from contextlib import contextmanager
 from importlib.metadata import version
 from inspect import signature
+from unittest.mock import Mock, call
 
 import pytest
 
@@ -96,6 +97,29 @@ def test_gundam_runtime_accepts_output_root_as_config_source(tmp_path) -> None:
     )
 
     assert runtime.absoluteOutputRootPath == tmp_path / "fit.root"
+
+
+def test_load_dataset_fraction_is_restored_and_applied_after_configure(tmp_path, monkeypatch) -> None:
+    runtime = gundam_interface.GundamRuntime(
+        workDir=tmp_path,
+        loader=gundam_interface.GundamLoader(),
+        configJsonString="{}",
+        loadDatasetFraction=0.1,
+    )
+    restored = gundam_interface.GundamRuntime.fromDict(runtime.toDict())
+    engine = Mock()
+    gundam = Mock(FitterEngine=Mock(return_value=engine))
+    monkeypatch.setattr(gundam_interface.GundamRuntime, "getGundamModule", lambda self: gundam)
+    interface = gundam_interface.GundamInterface(runtime=restored)
+
+    interface.configure()
+
+    assert engine.mock_calls[1:] == [
+        call.configure(),
+        call.getLikelihoodInterface(),
+        call.getLikelihoodInterface().getDatasetManager(),
+        call.getLikelihoodInterface().getDatasetManager().setDebugLoadDatasetFraction(fraction=0.1),
+    ]
 
 
 def test_gundam_runtime_rejects_load_postfit_without_output_root(tmp_path) -> None:
